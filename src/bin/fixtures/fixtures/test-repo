@@ -1,0 +1,66 @@
+blob
+mark :1
+data 0
+
+reset refs/heads/branch
+commit refs/heads/branch
+mark :2
+author Test User <test@example.com> 1551552695 +0000
+committer Test User <test@example.com> 1551552695 +0000
+data 15
+Initial import
+M 100644 :1 foo
+
+blob
+mark :3
+data 4
+foo
+
+commit refs/heads/master
+mark :4
+author Test User <test@example.com> 1551552749 +0000
+committer Test User <test@example.com> 1551552749 +0000
+data 70
+Update foo
+
+To ensure maximum fooness, update foo to contain content.
+from :2
+M 100644 :3 foo
+
+commit refs/heads/branch
+mark :5
+author Test User <test@example.com> 1551552839 +0000
+committer Test User <test@example.com> 1551552839 +0000
+data 72
+Add bar
+
+Having multiple different files is nice, so add a file, "bar".
+from :2
+M 100644 :1 bar
+
+blob
+mark :6
+data 4
+bar
+
+commit refs/heads/branch
+mark :7
+author Test User <test@example.com> 1551552922 +0000
+committer Test User <test@example.com> 1551552922 +0000
+data 70
+Update bar
+
+To ensure maximum barness, update bar to contain content.
+from :5
+M 100644 :6 bar
+
+commit refs/heads/master
+mark :8
+author Test User <test@example.com> 1551552935 +0000
+committer Test User <test@example.com> 1551552935 +0000
+data 22
+Merge branch 'branch'
+from :4
+merge :7
+M 100644 :6 bar
+

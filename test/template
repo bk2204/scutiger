@@ -1,0 +1,17 @@
+#!/usr/bin/env ruby
+
+require 'erb'
+
+class Template
+  def name
+    @name ||= 0
+    @name += 1
+    "name_a#{@name}"
+  end
+
+  def erb(file)
+    ERB.new(File.read(file), nil, '-', name).result(binding)
+  end
+end
+
+puts Template.new.erb(ARGV[0])

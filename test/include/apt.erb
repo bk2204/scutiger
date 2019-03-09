@@ -1,0 +1,4 @@
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get -y update && apt-get -y upgrade && \
+    apt-get -y install make pkg-config libpcre2-dev libgit2-dev libssh2-1-dev libcurl4-gnutls-dev zlib1g-dev cmake git

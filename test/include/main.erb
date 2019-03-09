@@ -1,0 +1,7 @@
+WORKDIR /usr/src/scutiger
+
+COPY . /usr/src/scutiger/
+
+RUN rm -fr target/ Cargo.lock
+
+ENV RUST_BACKTRACE=1

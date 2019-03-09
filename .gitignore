@@ -1,0 +1,9 @@
+# Build products.
+target/
+*.html
+*.stamp
+# Tool output.
+*.bk
+Cargo.lock
+test/Dockerfile.*
+!test/Dockerfile.*.erb

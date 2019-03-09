@@ -1,0 +1,7 @@
+FROM rustlang/rust:nightly
+
+<%= erb 'test/include/apt.erb' -%>
+
+<%= erb 'test/include/rustup.erb' -%>
+
+<%= erb 'test/include/main.erb' -%>
