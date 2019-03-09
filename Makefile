@@ -16,7 +16,7 @@ export PKG_CONFIG_ALL_DYNAMIC
 endif
 
 # Test configuration.
-GROUPS := debian stable nightly
+GROUPS := stretch stable nightly
 DOCKER_FILES := $(patsubst %,test/Dockerfile.%,$(GROUPS))
 DOCKER_STAMPS := $(patsubst %,test/Dockerfile.%.stamp,$(GROUPS))
 CI_TARGETS := $(patsubst %,ci-%,$(GROUPS))
