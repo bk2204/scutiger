@@ -1,0 +1,17 @@
+pool:
+  vmImage: 'Ubuntu-16.04'
+
+steps:
+    - task: UseRubyVersion@0
+      inputs:
+          versionSpec: '>= 2.3'
+          addToPath: true
+
+    - script: make ci-stretch
+      displayName: 'Rust 1.24 on Debian stretch'
+
+    - script: make ci-stable
+      displayName: 'Rust stable via rustup'
+
+    - script: make ci-nightly
+      displayName: 'Rust nightly via rustup'
