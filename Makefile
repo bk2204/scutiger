@@ -1,4 +1,4 @@
-DESTDIR ?=
+DESTDIR ?= /usr/local
 
 MANPAGE_DIR = doc/man
 
@@ -31,6 +31,10 @@ test:
 	cargo test
 
 install: all
+	for i in target/release/git-*; do \
+		[ -x "$$i" ] || continue; \
+		install -m 755 "$$i" "$(DESTDIR)/bin/$$(basename "$$i")"; \
+	done
 
 clean:
 	cargo clean
