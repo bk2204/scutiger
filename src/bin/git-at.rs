@@ -135,6 +135,7 @@ struct Program<'a> {
     summary: bool,
     show: bool,
     quiet: bool,
+    fixup: bool,
     head: &'a str,
     text: &'a str,
 }
@@ -152,6 +153,7 @@ impl<'a> Program<'a> {
         summary: bool,
         show: bool,
         quiet: bool,
+        fixup: bool,
         head: Option<&'a str>,
         text: &'a str,
     ) -> Self {
@@ -160,6 +162,7 @@ impl<'a> Program<'a> {
             summary,
             show,
             quiet,
+            fixup,
             head: head.unwrap_or("HEAD"),
             text,
         }
@@ -172,13 +175,18 @@ impl<'a> Program<'a> {
     /// `ErrorKind::NoSuchRevision`.
     fn run(&self) -> Result<Oid, Error> {
         let regex = self.pattern(self.text)?;
+        let fixup_regex = self.pattern("\\A\\s*(?:fixup|squash)!")?;
         let head = self.repo.revparse_single(self.head)?;
         let mut walker = self.repo.revwalk()?;
         walker.set_sorting(git2::Sort::from_bits(Self::SORT_TIME).unwrap());
         walker.push(head.id())?;
         for rev in walker {
             let commit = self.repo.find_commit(rev?)?;
-            if regex.is_match(commit.message_bytes())? {
+            let message = commit.message_bytes();
+            if !self.fixup && fixup_regex.is_match(message)? {
+                continue;
+            }
+            if regex.is_match(message)? {
                 return Ok(commit.id());
             }
         }
@@ -248,6 +256,11 @@ fn parse_options<'a>() -> App<'a, 'a> {
                 .short("q")
                 .help("Exit 1 silently if no commit is found"),
         )
+        .arg(
+            Arg::with_name("no-fixup")
+                .long("no-fixup")
+                .help("Ignore fixup and squash commits"),
+        )
         .arg(Arg::with_name("revision"))
         .arg(Arg::with_name("pattern").required(true))
 }
@@ -258,6 +271,7 @@ fn program<'a>(repo: &'a git2::Repository, matches: &'a ArgMatches) -> Program<'
         matches.is_present("summary"),
         matches.is_present("show"),
         matches.is_present("quiet"),
+        !matches.is_present("no-fixup"),
         matches.value_of("revision"),
         matches.value_of("pattern").unwrap(),
     )
@@ -297,7 +311,35 @@ mod tests {
         revision: Option<&str>,
         pattern: &str,
     ) -> Result<Oid, Error> {
-        Program::new(&fixtures.repo, summary, false, false, revision, pattern).run()
+        Program::new(
+            &fixtures.repo,
+            summary,
+            false,
+            false,
+            true,
+            revision,
+            pattern,
+        )
+        .run()
+    }
+
+    fn run_fixup(
+        fixtures: &TestRepository,
+        summary: bool,
+        fixup: bool,
+        revision: Option<&str>,
+        pattern: &str,
+    ) -> Result<Oid, Error> {
+        Program::new(
+            &fixtures.repo,
+            summary,
+            false,
+            false,
+            fixup,
+            revision,
+            pattern,
+        )
+        .run()
     }
 
     fn oid(hex: &str) -> Oid {
@@ -335,7 +377,7 @@ mod tests {
             oid("cade2f7cc336453e30007fe76a57732f5e635cd0")
         );
         assert_eq!(
-            run(&fixtures, false, Some("master~1"), "maximum barness").unwrap_err(),
+            run(&fixtures, false, Some("master~1~1"), "maximum barness").unwrap_err(),
             error(ErrorKind::NoSuchRevision)
         );
         assert_eq!(
@@ -362,7 +404,35 @@ mod tests {
         );
         assert_eq!(
             run(&fixtures, true, None, "Add").unwrap(),
-            oid("3f236e70544fc2b2d448d9f898d753667504190a")
+            oid("eb31d2fb9733a85ddcd9ec63712caa0dfe79cccc")
+        );
+    }
+
+    #[test]
+    fn fixup_results() {
+        let fixtures = TestRepository::new();
+
+        for summary in vec![true, false] {
+            assert_eq!(
+                run_fixup(&fixtures, summary, true, None, "Add baz").unwrap(),
+                oid("eb31d2fb9733a85ddcd9ec63712caa0dfe79cccc")
+            );
+            assert_eq!(
+                run_fixup(&fixtures, summary, false, None, "Add baz").unwrap(),
+                oid("4cf979cf194179a3b9dc1d65cc4dc29cfed32614")
+            );
+        }
+        assert_eq!(
+            run_fixup(&fixtures, false, true, None, "\\binitial\\b").unwrap(),
+            oid("eb31d2fb9733a85ddcd9ec63712caa0dfe79cccc")
+        );
+        assert_eq!(
+            run_fixup(&fixtures, false, false, None, "(?i)\\binitial\\b").unwrap(),
+            oid("84f17cd225de12eeaea57e0bdb32fd6a7b940254")
+        );
+        assert_eq!(
+            run_fixup(&fixtures, true, true, None, "\\binitial\\b").unwrap_err(),
+            error(ErrorKind::NoSuchRevision)
         );
     }
 }
