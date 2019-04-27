@@ -74,7 +74,7 @@ refs/heads/master
 
 You will need Rust 1.24 or later, Cargo, GNU Make, and Git. If you additionally
 have zlib, the 8-bit version of libpcre2, and libgit2 available, Scutiger will
-dynamically link against them. This is highly recommended for security rwasons.
+dynamically link against them. This is highly recommended for security reasons.
 
 Simply type `make` to build. Type `make test` to run the tests.
 
