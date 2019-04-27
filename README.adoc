@@ -46,6 +46,30 @@ regex to match. `--summary` limits the search to only the commit summary (i.e.
 the first line). `--show` runs `git show` on the commit instead of printing the
 revision.
 
+=== git recent-refs
+
+`git recent-refs` lists the most recent references and commits that you've used.
+It can sort by the committer date (`--sort=committerdate`), author date
+(`--sort=authordate`), or the date that the commit was last checked out
+(`--sort=visitdate`).
+
+For example, an invocation might look like this:
+
+[source,shell]
+----
+$ git recent-refs --sort=visitdate
+refs/heads/master
+refs/heads/recent-branches
+4684bb27d8dcd7f0234b1ae9175457aaa80b1321
+7956da97faab4ba731873418ee2751f521cce718
+refs/heads/recent-branches
+refs/heads/master
+refs/heads/fixup
+refs/heads/master
+refs/heads/azure-pipelines
+refs/heads/master
+----
+
 == Building
 
 You will need Rust 1.24 or later, Cargo, GNU Make, and Git. If you additionally
