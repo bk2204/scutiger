@@ -69,8 +69,12 @@ tmp:
 # We do not require both of these commands here since nightly Rust may be
 # missing one or more of these. When run under CI, they should be present for
 # stable Rust and catch any issues.
+#
+# Note if we're using rustup, cargo-clippy may exist in the PATH even if clippy
+# isn't installed, but it may be a wrapper that just fails when invoked. Check
+# that it can successfully print help output to check if we really have clippy.
 lint:
-	if command -v cargo-clippy; \
+	if command -v cargo-clippy && cargo-clippy --help >/dev/null 2>&1; \
 	then \
 		$(MAKE) clippy; \
 	fi
