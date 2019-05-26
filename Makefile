@@ -36,6 +36,11 @@ install: all
 		install -m 755 "$$i" "$(DESTDIR)/bin/$$(basename "$$i")"; \
 	done
 
+doc:
+	for i in doc/man/*.adoc; do \
+		asciidoctor -b manpage -a compat-mode $$i; \
+	done
+
 clean:
 	cargo clean
 	rm -fr target tmp
@@ -45,6 +50,7 @@ clean:
 	done
 	rm -f $(DOCKER_FILES) $(DOCKER_STAMPS)
 	rm -fr tmp
+	rm -fr doc/man/*.1
 
 linkage: tmp
 	set -e; \
@@ -87,7 +93,7 @@ ci: $(CI_TARGETS)
 
 ci-%: test/Dockerfile.%.stamp
 	docker run --rm $$(cat "$<") \
-		sh -c 'cd /usr/src/scutiger && make all && make test && make lint'
+		sh -c 'cd /usr/src/scutiger && make all && make doc && make test && make lint'
 
 test/Dockerfile.%.stamp: test/Dockerfile.% $(SRC)
 	docker build --iidfile="$@" -f "$<" .

@@ -1,0 +1,38 @@
+= git-at(1)
+
+== Name
+
+git-at - Match a commit based on commit message
+
+== Synopsis
+
+'git at' [--summary] [--show] [--quiet] [--no-fixup] [<revision>] <pattern>
+
+== Description
+
+Matches a commit based on its commit message and prints the first matching
+commit. By default, just the revision itself is printed, followed by a newline.
+If no matching commit is found, prints an error, and exits 1.
+
+== Options
+
+--no-fixup::
+  Do not consider those commits starting with 'squash!' or 'fixup!', as are
+  created by `git commit --squash` or `git commit --fixup`. Find the next
+  matching commit instead, if one exists.
+
+--quiet::
+-q::
+  If no matching commit is found, do not print an error message, just exit 1
+  silently.
+
+--summary::
+-s::
+  Search only the commit summary for the pattern.
+
+<revision>::
+  Any arbitrary Git revision expression (see **git-rev-parse**(1)). If not
+  specified, defaults to HEAD.
+
+<pattern>::
+  Any PCRE-compatible regular expression.

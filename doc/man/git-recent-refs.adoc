@@ -1,0 +1,22 @@
+= git-recent-refs(1)
+
+== Name
+
+git-recent-refs - List recent references and commits
+
+== Synopsis
+
+'git recent-refs' --sort=<type>
+
+== Description
+
+Print the recent references, and, if `--sort=visitdate` is used, any other recent
+commits, sorted from most to least recently.
+
+== Options
+
+--sort=<type>::
+  Sort references by the given type. If type is 'authordate', list by the author
+  date of the most recent commit; if 'committerdate', list instead by the
+  committer date; and if 'visitdate', list references in the order they were
+  last checked out, including duplicates and detached commits, if any.
