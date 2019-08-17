@@ -93,7 +93,13 @@ ci: $(CI_TARGETS)
 
 ci-%: test/Dockerfile.%.stamp
 	docker run --rm $$(cat "$<") \
-		sh -c 'cd /usr/src/scutiger && make all && make doc && make test && make lint'
+		sh -c 'cd /usr/src/scutiger && make test-full'
+
+test-full:
+	make all
+	make doc
+	make test
+	make lint
 
 test/Dockerfile.%.stamp: test/Dockerfile.% $(SRC)
 	docker build --iidfile="$@" -f "$<" .
