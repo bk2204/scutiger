@@ -1,3 +1,6 @@
+#![allow(unknown_lints)]
+#![allow(bare_trait_objects)]
+
 extern crate clap;
 extern crate git2;
 extern crate libc;

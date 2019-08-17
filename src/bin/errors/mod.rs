@@ -1,3 +1,6 @@
+#![allow(unknown_lints)]
+#![allow(bare_trait_objects)]
+
 use std::convert;
 use std::error;
 use std::fmt;
