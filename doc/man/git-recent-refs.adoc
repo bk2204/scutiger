@@ -6,7 +6,7 @@ git-recent-refs - List recent references and commits
 
 == Synopsis
 
-'git recent-refs' --sort=<type>
+'git recent-refs' [--sort=<type>]
 
 == Description
 
@@ -20,3 +20,5 @@ commits, sorted from most to least recently.
   date of the most recent commit; if 'committerdate', list instead by the
   committer date; and if 'visitdate', list references in the order they were
   last checked out, including duplicates and detached commits, if any.
++
+If this value is not specified, it defaults to 'visitdate'.

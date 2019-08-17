@@ -140,7 +140,6 @@ fn parse_options<'a>() -> App<'a, 'a> {
             Arg::with_name("sort")
                 .long("sort")
                 .takes_value(true)
-                .required(true)
                 .possible_values(&["visitdate", "committerdate", "authordate"])
                 .help("Sort refs by the given type"),
         )
@@ -156,7 +155,10 @@ fn sort_type(kind: &str) -> Result<SortKind, Error> {
 }
 
 fn program<'a>(repo: &'a Repository, matches: &'a ArgMatches) -> Program<'a> {
-    Program::new(repo, sort_type(matches.value_of("sort").unwrap()).unwrap())
+    Program::new(
+        repo,
+        sort_type(matches.value_of("sort").unwrap_or("visitdate")).unwrap(),
+    )
 }
 
 fn repo() -> Repository {
