@@ -1,0 +1,41 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  build-stretch:
+    name: Linux (Debian stretch)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions/setup-ruby@v1
+    - run: make ci-stretch
+  build-buster:
+    name: Linux (Debian buster)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions/setup-ruby@v1
+    - run: make ci-buster
+  build-stable:
+    name: Linux (Rust stable)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions/setup-ruby@v1
+    - run: make ci-stable
+  build-nightly:
+    name: Linux (Rust nightly)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions/setup-ruby@v1
+    - run: make ci-nightly
+  build-mac:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@master
+    - run: brew install ruby asciidoctor rust
+    - run: make test-full
+
+
