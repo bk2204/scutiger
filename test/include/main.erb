@@ -2,6 +2,6 @@ WORKDIR /usr/src/scutiger
 
 COPY . /usr/src/scutiger/
 
-RUN rm -fr target/ Cargo.lock
+RUN rm -fr target/
 
 ENV RUST_BACKTRACE=1

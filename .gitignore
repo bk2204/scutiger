@@ -5,6 +5,5 @@ target/
 # Tool output.
 *.bk
 *.1
-Cargo.lock
 test/Dockerfile.*
 !test/Dockerfile.*.erb
