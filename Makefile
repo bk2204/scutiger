@@ -79,12 +79,13 @@ tmp:
 # Note if we're using rustup, cargo-clippy may exist in the PATH even if clippy
 # isn't installed, but it may be a wrapper that just fails when invoked. Check
 # that it can successfully print help output to check if we really have clippy.
+# The same goes for rustfmt.
 lint:
 	if command -v cargo-clippy && cargo-clippy --help >/dev/null 2>&1; \
 	then \
 		$(MAKE) clippy; \
 	fi
-	if command -v rustfmt; \
+	if command -v rustfmt && rustfmt --help >/dev/null 2>&1; \
 	then \
 		$(MAKE) fmt; \
 	fi
