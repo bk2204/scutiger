@@ -120,3 +120,95 @@ from :8
 merge :13
 M 100644 :12 baz
 
+blob
+mark :15
+data 21
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
+commit refs/heads/merge3
+mark :16
+author Test User <test@example.com> 1589149728 +0000
+committer Test User <test@example.com> 1589149728 +0000
+data 8
+Add seq
+from :14
+M 100644 :15 seq
+
+blob
+mark :17
+data 26
+1
+change
+3
+4
+5
+6
+7
+8
+9
+10
+
+commit refs/heads/merge1
+mark :18
+author Test User <test@example.com> 1589149794 +0000
+committer Test User <test@example.com> 1589149794 +0000
+data 18
+Change for merge1
+from :16
+M 100644 :17 seq
+
+blob
+mark :19
+data 27
+1
+change2
+3
+4
+5
+6
+7
+8
+9
+10
+
+commit refs/heads/merge2
+mark :20
+author Test User <test@example.com> 1589149831 +0000
+committer Test User <test@example.com> 1589149831 +0000
+data 18
+Change for merge2
+from :16
+M 100644 :19 seq
+
+blob
+mark :21
+data 27
+1
+2
+3
+4
+5
+6
+7
+8
+change3
+10
+
+commit refs/heads/merge3
+mark :22
+author Test User <test@example.com> 1589149867 +0000
+committer Test User <test@example.com> 1589149867 +0000
+data 18
+Change for merge3
+from :16
+M 100644 :21 seq
+

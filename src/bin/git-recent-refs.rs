@@ -250,7 +250,14 @@ mod tests {
             run(&fixtures, SortKind::Committed)
                 .unwrap()
                 .collect::<Vec<_>>(),
-            vec!["refs/heads/master", "refs/heads/fixup", "refs/heads/branch"],
+            vec![
+                "refs/heads/merge3",
+                "refs/heads/merge2",
+                "refs/heads/merge1",
+                "refs/heads/master",
+                "refs/heads/fixup",
+                "refs/heads/branch"
+            ],
         );
     }
 }

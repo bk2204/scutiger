@@ -1,0 +1,30 @@
+= git-test-merge(1)
+
+== Name
+
+git-test-merge - Test whether a merge will complete successfully
+
+== Synopsis
+
+'git test-merge' [--write-tree] <head> <head>
+
+== Description
+
+Attempts to merge the given heads without changing the working tree or index.
+If the merge is successful, exits 0.  If the merge is unsuccessful (that is,
+there are conflicts), exits 1.
+
+Unlike the builtin `git merge`, this command requires all branches (or other
+heads) to be specified on the command line; `HEAD` is not implied.  This allows
+more flexibility (and better performance) in testing merges across arbitrary
+revisions without needing to change the current branch.
+
+== Options
+
+--write-tree::
+  If the merge succeeds, write the result to the repository and print the object
+  ID of the root tree created by the merge.  This can be useful to create a
+  commit with the merged result in conjunction with `git commit-tree`.
+
+<head>::
+  Any arbitrary Git revision expression (see **git-rev-parse**(1)).

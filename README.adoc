@@ -70,6 +70,23 @@ refs/heads/azure-pipelines
 refs/heads/master
 ----
 
+=== git test-merge
+
+`git test-merge` takes two branches or other revisions and tries to perform a
+merge and exits successfully or unsuccessfully depending on whether it
+succeeded.  If you pass `--write-tree` it writes the result of the merge into
+the repository and prints the tree to the output.
+
+For example, an invocation might look like this:
+
+[source,shell]
+----
+$ git test-merge --write-tree merge1 merge3
+ff2a880a0f65b9291dae1958f772a7b819e023c9
+$ git test-merge merge1 merge2
+fatal: merge conflict
+----
+
 == Building
 
 You will need Rust 1.24 or later, Cargo, GNU Make, and Git. If you additionally

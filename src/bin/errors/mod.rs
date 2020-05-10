@@ -20,6 +20,7 @@ pub enum ExitStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorKind {
     NoSuchRevision,
+    Conflict,
     GitError,
     PCREError,
     IOError,
@@ -37,6 +38,7 @@ impl fmt::Display for Error {
             // Despite the text, this is not a fatal error in our sense. For compatibility with
             // Git, however, we choose to preserve the same wording.
             ErrorKind::NoSuchRevision => write!(f, "fatal: needed a single revision"),
+            ErrorKind::Conflict => write!(f, "fatal: merge conflict"),
             ErrorKind::PCREError => match self.internal {
                 Some(ref e) => write!(f, "fatal: invalid regular expression: {}", e),
                 None => write!(f, "fatal: invalid regular expression"),
@@ -94,6 +96,7 @@ impl Error {
     pub fn exit_status(&self) -> ExitStatus {
         match self.kind {
             ErrorKind::NoSuchRevision => ExitStatus::NonFatal,
+            ErrorKind::Conflict => ExitStatus::NonFatal,
             _ => ExitStatus::Fatal,
         }
     }
@@ -103,6 +106,7 @@ impl convert::From<git2::Error> for Error {
     fn from(error: git2::Error) -> Self {
         let kind = match error.code() {
             git2::ErrorCode::NotFound => ErrorKind::NoSuchRevision,
+            git2::ErrorCode::Conflict => ErrorKind::Conflict,
             _ => ErrorKind::GitError,
         };
         Error::new(kind, Some(error))
