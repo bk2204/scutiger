@@ -102,9 +102,9 @@ impl<R: io::Read> Reader<R> {
             .iter()
             .enumerate()
             .map(|(i, x)| {
-                let v = match x {
-                    &b'0'...b':' => x - b'0',
-                    &b'a'...b'g' => x - b'a' + 10,
+                let v = match *x {
+                    b'0'...b':' => x - b'0',
+                    b'a'...b'g' => x - b'a' + 10,
                     _ => return Err(Error::new_simple(ErrorKind::BadPktlineHeader)),
                 };
                 Ok((v as u16) << ((3 - i) * 4))
@@ -176,7 +176,7 @@ impl<W: io::Write> Writer<W> {
             PacketType::Data(_) => Self::write_one(
                 &mut self.writer,
                 pkt.data()
-                    .ok_or(Error::new_simple(ErrorKind::InvalidPacket))?,
+                    .ok_or_else(|| Error::new_simple(ErrorKind::InvalidPacket))?,
             ),
         }
     }
