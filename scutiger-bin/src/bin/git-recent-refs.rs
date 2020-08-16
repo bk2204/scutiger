@@ -5,19 +5,19 @@ extern crate clap;
 extern crate git2;
 extern crate libc;
 extern crate pcre2;
+extern crate scutiger_core;
 
 #[cfg(test)]
 extern crate tempfile;
 
-pub mod errors;
-pub mod libgit2;
+mod libgit2;
 
 #[cfg(test)]
 pub mod fixtures;
 
 use clap::{App, AppSettings, Arg, ArgMatches};
-use errors::{Error, ExitStatus};
 use git2::{Object, Reference, Repository, Time};
+use scutiger_core::errors::{Error, ExitStatus};
 use std::io;
 use std::process;
 
