@@ -110,7 +110,13 @@ test/Dockerfile.%: test/Dockerfile.%.erb $(INCLUDES)
 
 clippy:
 	rm -rf target
-	cargo clippy -- -D warnings
+	@# We exclude these lints here instead of in the file because Rust 1.24
+	@# doesn't support excluding clippy warnings.  Similarly, it doesn't support
+	@# the syntax these lints suggest.
+	cargo clippy -- \
+		-A clippy::range-plus-one \
+		-A clippy::needless-lifetimes \
+		-D warnings
 
 fmt:
 	if rustfmt --help | grep -qse --check; \
