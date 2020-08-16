@@ -24,6 +24,8 @@ pub enum ErrorKind {
     GitError,
     PCREError,
     IOError,
+    BadPktlineHeader,
+    InvalidPacket,
 }
 
 #[derive(Debug)]
@@ -51,6 +53,8 @@ impl fmt::Display for Error {
                 Some(ref e) => write!(f, "fatal: {}", e),
                 None => write!(f, "fatal: an unknown error occurred"),
             },
+            ErrorKind::BadPktlineHeader => write!(f, "fatal: malformed or unknown pkt-line header"),
+            ErrorKind::InvalidPacket => write!(f, "fatal: invalid or malformed packet"),
         }
     }
 }
@@ -84,6 +88,14 @@ impl Error {
         }
     }
 
+    /// Create a new error without wrapping any other error.
+    pub fn new_simple(kind: ErrorKind) -> Self {
+        Error {
+            kind,
+            internal: None,
+        }
+    }
+
     /// Indicate whether this error is considered fatal.
     ///
     /// An error is fatal if it results in an exit of 2 or higher. A missing revision is not
@@ -99,6 +111,19 @@ impl Error {
             ErrorKind::Conflict => ExitStatus::NonFatal,
             _ => ExitStatus::Fatal,
         }
+    }
+}
+
+impl convert::Into<io::Error> for Error {
+    fn into(self) -> io::Error {
+        let kind = match self.internal {
+            Some(ref e) => match e.downcast_ref::<io::Error>() {
+                Some(x) => x.kind(),
+                None => io::ErrorKind::InvalidData,
+            },
+            None => io::ErrorKind::InvalidData,
+        };
+        io::Error::new(kind, self)
     }
 }
 
