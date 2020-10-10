@@ -142,7 +142,7 @@ impl<R: io::Read> io::Read for Reader<R> {
             };
             if n > 0 {
                 let n = cmp::min(n, buf.len());
-                buf.copy_from_slice(&self.buf[0..n]);
+                buf[0..n].copy_from_slice(&self.buf[0..n]);
                 return Ok(n);
             }
         }
