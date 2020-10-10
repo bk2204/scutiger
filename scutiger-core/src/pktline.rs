@@ -70,7 +70,7 @@ impl<R: io::Read> Reader<R> {
     fn read_one(rdr: &mut R, buf: &mut [u8]) -> Result<PacketType, Error> {
         let mut hdr = [0u8; 4];
         rdr.read_exact(&mut hdr)?;
-        let size = Self::parse_header(&hdr)? as usize;
+        let size = Self::parse_header(hdr)? as usize;
         match size {
             0 => Ok(PacketType::Flush),
             1 => Ok(PacketType::Delim),
@@ -88,7 +88,7 @@ impl<R: io::Read> Reader<R> {
     pub fn read_packet(&mut self) -> Result<Packet, Error> {
         let mut hdr = [0u8; 4];
         self.rdr.read_exact(&mut hdr)?;
-        let size = Self::parse_header(&hdr)? as usize;
+        let size = Self::parse_header(hdr)? as usize;
         match size {
             0 => Ok(Packet::new(PacketType::Flush, b"")),
             1 => Ok(Packet::new(PacketType::Delim, b"")),
@@ -101,7 +101,7 @@ impl<R: io::Read> Reader<R> {
         }
     }
 
-    fn parse_header(buf: &[u8; 4]) -> Result<u16, Error> {
+    fn parse_header(buf: [u8; 4]) -> Result<u16, Error> {
         let x: Result<Vec<u16>, Error> = buf
             .iter()
             .enumerate()
@@ -252,24 +252,24 @@ mod tests {
 
     #[test]
     fn pktline_headers() {
-        assert_eq!(Reader::<io::Cursor<&[u8]>>::parse_header(b"0000"), Ok(0));
-        assert_eq!(Reader::<io::Cursor<&[u8]>>::parse_header(b"0001"), Ok(1));
-        assert_eq!(Reader::<io::Cursor<&[u8]>>::parse_header(b"0004"), Ok(4));
+        assert_eq!(Reader::<io::Cursor<&[u8]>>::parse_header(*b"0000"), Ok(0));
+        assert_eq!(Reader::<io::Cursor<&[u8]>>::parse_header(*b"0001"), Ok(1));
+        assert_eq!(Reader::<io::Cursor<&[u8]>>::parse_header(*b"0004"), Ok(4));
         assert_eq!(
-            Reader::<io::Cursor<&[u8]>>::parse_header(b"ffff"),
+            Reader::<io::Cursor<&[u8]>>::parse_header(*b"ffff"),
             Ok(65535)
         );
-        assert_eq!(Reader::<io::Cursor<&[u8]>>::parse_header(b"2204"), Ok(8708));
+        assert_eq!(Reader::<io::Cursor<&[u8]>>::parse_header(*b"2204"), Ok(8708));
         assert_eq!(
-            Reader::<io::Cursor<&[u8]>>::parse_header(b"cafe"),
+            Reader::<io::Cursor<&[u8]>>::parse_header(*b"cafe"),
             Ok(51966)
         );
         assert_eq!(
-            Reader::<io::Cursor<&[u8]>>::parse_header(b"cafE"),
+            Reader::<io::Cursor<&[u8]>>::parse_header(*b"cafE"),
             Err(Error::new_simple(ErrorKind::BadPktlineHeader))
         );
         assert_eq!(
-            Reader::<io::Cursor<&[u8]>>::parse_header(b"\xc2\xa9fe"),
+            Reader::<io::Cursor<&[u8]>>::parse_header(*b"\xc2\xa9fe"),
             Err(Error::new_simple(ErrorKind::BadPktlineHeader))
         );
     }
