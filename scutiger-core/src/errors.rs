@@ -130,6 +130,25 @@ impl Error {
         }
     }
 
+    /// Return the kind of this error.
+    pub fn kind(&self) -> ErrorKind {
+        self.kind
+    }
+
+    /// Return the kind of this error when converted into an `io::Error`.
+    ///
+    /// If the internal error is an `io::Error`, returns its kind; otherwise, returns the kind it
+    /// would have if it were converted into an `io::Error`.
+    pub fn io_kind(&self) -> io::ErrorKind {
+        match self.internal {
+            Some(ref e) => match e.downcast_ref::<io::Error>() {
+                Some(x) => x.kind(),
+                None => io::ErrorKind::InvalidData,
+            },
+            None => io::ErrorKind::InvalidData,
+        }
+    }
+
     /// Indicate whether this error is considered fatal.
     ///
     /// An error is fatal if it results in an exit of 2 or higher. A missing revision is not
@@ -150,14 +169,7 @@ impl Error {
 
 impl convert::Into<io::Error> for Error {
     fn into(self) -> io::Error {
-        let kind = match self.internal {
-            Some(ref e) => match e.downcast_ref::<io::Error>() {
-                Some(x) => x.kind(),
-                None => io::ErrorKind::InvalidData,
-            },
-            None => io::ErrorKind::InvalidData,
-        };
-        io::Error::new(kind, self)
+        io::Error::new(self.io_kind(), self)
     }
 }
 
