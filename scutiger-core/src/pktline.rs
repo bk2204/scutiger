@@ -164,7 +164,7 @@ impl<W: io::Write> Writer<W> {
         let header = format!("{:04x}", buf.len() + 4);
         writer.write_all(header.as_bytes())?;
         writer.write_all(&buf)?;
-        Ok(buf.len() + 4)
+        Ok(buf.len())
     }
 
     pub fn write_packet(&mut self, pkt: &Packet) -> Result<usize, Error> {
