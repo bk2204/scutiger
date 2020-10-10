@@ -26,6 +26,15 @@ pub enum ErrorKind {
     IOError,
     BadPktlineHeader,
     InvalidPacket,
+    UnexpectedPacket,
+    InvalidLFSOid,
+    InvalidInteger,
+    ParseError,
+    UnknownCommand,
+    MissingData,
+    ExtraData,
+    CorruptData,
+    NotAllowed,
 }
 
 #[derive(Debug)]
@@ -53,8 +62,17 @@ impl fmt::Display for Error {
                 Some(ref e) => write!(f, "fatal: {}", e),
                 None => write!(f, "fatal: an unknown error occurred"),
             },
-            ErrorKind::BadPktlineHeader => write!(f, "fatal: malformed or unknown pkt-line header"),
-            ErrorKind::InvalidPacket => write!(f, "fatal: invalid or malformed packet"),
+            ErrorKind::BadPktlineHeader => write!(f, "malformed or unknown pkt-line header"),
+            ErrorKind::InvalidPacket => write!(f, "invalid or malformed packet"),
+            ErrorKind::UnexpectedPacket => write!(f, "unexpected packet while parsing"),
+            ErrorKind::InvalidLFSOid => write!(f, "invalid or malformed LFS oid"),
+            ErrorKind::InvalidInteger => write!(f, "invalid or malformed integer or size value"),
+            ErrorKind::ParseError => write!(f, "parse error"),
+            ErrorKind::UnknownCommand => write!(f, "unknown command or operation"),
+            ErrorKind::MissingData => write!(f, "incomplete or missing data"),
+            ErrorKind::ExtraData => write!(f, "extra data"),
+            ErrorKind::CorruptData => write!(f, "corrupt data"),
+            ErrorKind::NotAllowed => write!(f, "not allowed"),
         }
     }
 }
