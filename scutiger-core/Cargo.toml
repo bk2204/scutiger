@@ -5,7 +5,7 @@ authors = ["brian m. carlson <sandals@crustytoothpaste.net>"]
 
 [dependencies]
 pcre2 = "^0.1"
-git2 = { version = "0.6.5", default-features = false }
+git2 = { version = "0.13", default-features = false }
 pkg-config = "^0.3"
 
 [dev-dependencies]

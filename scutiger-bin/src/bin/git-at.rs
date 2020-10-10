@@ -68,7 +68,7 @@ impl<'a> Program<'a> {
         let fixup_regex = self.pattern("\\A\\s*(?:fixup|squash)!")?;
         let head = self.repo.revparse_single(self.head)?;
         let mut walker = self.repo.revwalk()?;
-        walker.set_sorting(git2::Sort::from_bits(Self::SORT_TIME).unwrap());
+        walker.set_sorting(git2::Sort::from_bits(Self::SORT_TIME).unwrap())?;
         walker.push(head.id())?;
         for rev in walker {
             let commit = self.repo.find_commit(rev?)?;
