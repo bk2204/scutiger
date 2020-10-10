@@ -41,6 +41,7 @@ pub enum ErrorKind {
 pub struct Error {
     kind: ErrorKind,
     internal: Option<Box<error::Error + Send + Sync>>,
+    message: Option<String>,
 }
 
 impl fmt::Display for Error {
@@ -73,7 +74,11 @@ impl fmt::Display for Error {
             ErrorKind::ExtraData => write!(f, "extra data"),
             ErrorKind::CorruptData => write!(f, "corrupt data"),
             ErrorKind::NotAllowed => write!(f, "not allowed"),
-        }
+        }?;
+        if let Some(ref msg) = self.message {
+            write!(f, ": {}", msg)?;
+        };
+        Ok(())
     }
 }
 
@@ -103,6 +108,7 @@ impl Error {
                 Some(e) => Some(e.into()),
                 None => None,
             },
+            message: None,
         }
     }
 
@@ -111,6 +117,16 @@ impl Error {
         Error {
             kind,
             internal: None,
+            message: None,
+        }
+    }
+
+    /// Create a new error without wrapping any other error.
+    pub fn from_message<M: Into<String>>(kind: ErrorKind, msg: M) -> Self {
+        Error {
+            kind,
+            internal: None,
+            message: Some(msg.into()),
         }
     }
 
