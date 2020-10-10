@@ -116,6 +116,10 @@ impl<R: io::Read> Reader<R> {
             .collect();
         Ok(x?.into_iter().sum())
     }
+
+    pub fn iter(&mut self) -> iter::ReaderIterator<'_, R> {
+        iter::ReaderIterator::new(self)
+    }
 }
 
 impl<R: io::Read> io::Read for Reader<R> {
@@ -200,6 +204,35 @@ impl<W: io::Write> io::Write for Writer<W> {
 
     fn flush(&mut self) -> Result<(), io::Error> {
         self.writer.flush()
+    }
+}
+
+mod iter {
+    use super::{Packet, Reader};
+    use crate::errors::Error;
+    use std::io;
+    use std::iter;
+
+    pub struct ReaderIterator<'a, R: io::Read> {
+        rdr: &'a mut Reader<R>,
+    }
+
+    impl<'a, R: io::Read> ReaderIterator<'a, R> {
+        pub fn new(rdr: &'a mut Reader<R>) -> Self {
+            ReaderIterator { rdr }
+        }
+    }
+
+    impl<'a, R: io::Read> iter::Iterator for ReaderIterator<'a, R> {
+        type Item = Result<Packet, Error>;
+
+        fn next(&mut self) -> Option<Result<Packet, Error>> {
+            match self.rdr.read_packet() {
+                Ok(x) => Some(Ok(x)),
+                Err(ref e) if e.io_kind() == io::ErrorKind::UnexpectedEof => None,
+                Err(e) => Some(Err(e)),
+            }
+        }
     }
 }
 
