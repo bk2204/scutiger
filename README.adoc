@@ -97,10 +97,10 @@ Simply type `make` to build. Type `make test` to run the tests.
 
 == Compatibility
 
-Scutiger utilities are designed to compile with Rust 1.24 or later. They may
+Scutiger utilities are designed to compile with Rust 1.41.1 or later. They may
 also work on earlier versions, but this has not been tested.
 
-Dependencies are pinned to versions which work on Rust 1.24.
+Dependencies are pinned to versions which work on Rust 1.41.1.
 
 The code is written in a generic way so it should function on most platforms;
 however, only Linux is tested at the moment.
