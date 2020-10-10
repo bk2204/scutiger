@@ -75,6 +75,9 @@ impl<R: io::Read> Reader<R> {
             0 => Ok(PacketType::Flush),
             1 => Ok(PacketType::Delim),
             2 | 3 => Err(Error::new_simple(ErrorKind::BadPktlineHeader)),
+            n if n > Self::MAX_PACKET_LEN + 4 => {
+                Err(Error::new_simple(ErrorKind::BadPktlineHeader))
+            }
             _ => {
                 rdr.read_exact(&mut buf[0..(size - 4)])?;
                 Ok(PacketType::Data(size - 4))
