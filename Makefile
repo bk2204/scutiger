@@ -121,9 +121,9 @@ clippy:
 fmt:
 	if rustfmt --help | grep -qse --check; \
 	then \
-		rustfmt --check $$(find . -name '*.rs'); \
+		rustfmt --check $$(find . -name '*.rs' | grep -v '^./target'); \
 	else \
-		rustfmt --write-mode diff $$(find . -name '*.rs'); \
+		rustfmt --write-mode diff $$(find . -name '*.rs' | grep -v '^./target'); \
 	fi
 
 .PHONY: all lint ci clean doc clippy fmt linkage test
