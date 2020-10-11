@@ -3,4 +3,5 @@
 members = [
     "scutiger-bin",
     "scutiger-core",
+    "scutiger-lfs",
 ]
