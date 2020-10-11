@@ -292,7 +292,10 @@ mod tests {
             Reader::<io::Cursor<&[u8]>>::parse_header(*b"ffff"),
             Ok(65535)
         );
-        assert_eq!(Reader::<io::Cursor<&[u8]>>::parse_header(*b"2204"), Ok(8708));
+        assert_eq!(
+            Reader::<io::Cursor<&[u8]>>::parse_header(*b"2204"),
+            Ok(8708)
+        );
         assert_eq!(
             Reader::<io::Cursor<&[u8]>>::parse_header(*b"cafe"),
             Ok(51966)
