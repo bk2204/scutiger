@@ -1,0 +1,5 @@
+= Scutiger
+
+Scutiger is a collection of general-purpose Git utilities for people who use Git a lot.
+
+This crate provides functionality shared by the `scutiger-bin` and `scutiger-core` crates and is not useful without them.
