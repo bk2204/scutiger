@@ -669,8 +669,8 @@ impl<'p> Program<'p> {
     }
 
     #[cfg(not(unix))]
-    fn set_permissions(&self) -> Result<(), Error> {
-        Ok(())
+    fn set_permissions(&self) -> Result<u32, Error> {
+        Ok(0o077)
     }
 
     fn main_internal<R: io::Read, O: io::Write, E: io::Write>(
