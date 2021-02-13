@@ -222,7 +222,7 @@ impl Oid {
     fn valid(b: &[u8]) -> bool {
         b.len() == 64
             && b.iter()
-                .all(|&x| (x >= b'0' && x <= b'9') || (x >= b'a' && x <= b'f'))
+                .all(|&x| (b'0'..=b'9').contains(&x) || (b'a'..=b'f').contains(&x))
     }
 
     /// Returns the expected path for this object given the `path` argument, which should be a
