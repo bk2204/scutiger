@@ -1,5 +1,6 @@
 #![allow(unknown_lints)]
 #![allow(bare_trait_objects)]
+#![allow(clippy::upper_case_acronyms)]
 
 use std::convert;
 use std::error;
