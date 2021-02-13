@@ -726,11 +726,15 @@ fn repo<P: AsRef<Path>>(path: P) -> Repository {
     }
 }
 
+#[cfg(unix)]
 fn setup() {
     unsafe {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
 }
+
+#[cfg(not(unix))]
+fn setup() {}
 
 fn main() {
     setup();
