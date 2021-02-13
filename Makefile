@@ -21,6 +21,7 @@ DOCKER_FILES := $(patsubst %,test/Dockerfile.%,$(GROUPS))
 DOCKER_STAMPS := $(patsubst %,test/Dockerfile.%.stamp,$(GROUPS))
 CI_TARGETS := $(patsubst %,ci-%,$(GROUPS))
 INCLUDES := $(wildcard test/include/*.erb)
+MANPAGES := $(patsubst %.adoc,%.1,$(wildcard doc/man/*.adoc))
 
 SRC := $(shell find . -name '*.rs') Makefile Cargo.toml
 
@@ -41,10 +42,10 @@ install: all
 	pandoc -f docbook -t commonmark -o $@ $@+
 	$(RM) $@+
 
-doc:
-	for i in doc/man/*.adoc; do \
-		asciidoctor -b manpage -a compat-mode $$i; \
-	done
+%.1: %.adoc
+	asciidoctor -b manpage -a compat-mode -o $@ $^
+
+doc: $(MANPAGES)
 
 clean:
 	cargo clean
