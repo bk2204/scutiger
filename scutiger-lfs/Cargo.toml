@@ -2,6 +2,17 @@
 name = "scutiger-lfs"
 version = "0.0.1"
 authors = ["brian m. carlson <sandals@crustytoothpaste.net>"]
+description = "a set of Git LFS-related utilities"
+repository = "https://github.com/bk2204/scutiger"
+license = "MIT"
+license-file = "../LICENSE"
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+    "LICENSE",
+]
 
 [dependencies]
 bytes = "0.4"

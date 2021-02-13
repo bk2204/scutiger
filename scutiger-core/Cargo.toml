@@ -2,6 +2,16 @@
 name = "scutiger-core"
 version = "0.0.1"
 authors = ["brian m. carlson <sandals@crustytoothpaste.net>"]
+description = "a set of shared functionality for the other Scutiger crates"
+repository = "https://github.com/bk2204/scutiger"
+license = "MIT"
+license-file = "../LICENSE"
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+]
 
 [dependencies]
 pcre2 = "^0.1"
