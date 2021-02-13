@@ -116,6 +116,7 @@ clippy:
 	cargo clippy -- \
 		-A clippy::range-plus-one \
 		-A clippy::needless-lifetimes \
+		-A clippy::unknown-clippy-lints \
 		-D warnings
 
 fmt:
