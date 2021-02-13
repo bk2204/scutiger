@@ -50,10 +50,10 @@ impl<'p> Program<'p> {
         let objects = self
             .heads
             .iter()
-            .map(|x| Ok(self.repo.revparse_single(&x)?))
+            .map(|x| self.repo.revparse_single(&x))
             .collect::<Result<Vec<_>, git2::Error>>()?;
         let parsed: Result<Vec<_>, git2::Error> =
-            objects.iter().map(|x| Ok(x.peel_to_commit()?)).collect();
+            objects.iter().map(|x| x.peel_to_commit()).collect();
         let heads = parsed?;
         let mut index =
             self.repo
