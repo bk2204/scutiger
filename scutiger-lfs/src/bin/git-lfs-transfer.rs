@@ -1,6 +1,7 @@
 #![allow(unknown_lints)]
 #![allow(bare_trait_objects)]
 #![allow(clippy::unnecessary_wraps)]
+#![allow(clippy::match_like_matches_macro)]
 
 extern crate bytes;
 extern crate clap;

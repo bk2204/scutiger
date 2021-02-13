@@ -116,7 +116,6 @@ clippy:
 	cargo clippy -- \
 		-A clippy::range-plus-one \
 		-A clippy::needless-lifetimes \
-		-A clippy::match-like-matches-macro \
 		-D warnings
 
 fmt:
