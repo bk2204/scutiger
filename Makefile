@@ -17,9 +17,11 @@ endif
 
 # Test configuration.
 GROUPS := stretch buster stable nightly
+CRATES := core bin lfs
 DOCKER_FILES := $(patsubst %,test/Dockerfile.%,$(GROUPS))
 DOCKER_STAMPS := $(patsubst %,test/Dockerfile.%.stamp,$(GROUPS))
 CI_TARGETS := $(patsubst %,ci-%,$(GROUPS))
+PACKAGE_TARGETS := $(patsubst %,package-%,$(CRATES))
 INCLUDES := $(wildcard test/include/*.erb)
 MANPAGES := $(patsubst %.adoc,%.1,$(wildcard doc/man/*.adoc))
 
@@ -96,6 +98,11 @@ lint:
 	then \
 		$(MAKE) fmt; \
 	fi
+
+package: $(PACKAGE_TARGETS)
+
+package-%: scutiger-% scutiger-%/README.md
+	(cd "$<" && cargo package --allow-dirty)
 
 ci: $(CI_TARGETS)
 
