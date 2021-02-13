@@ -167,9 +167,9 @@ impl Error {
     }
 }
 
-impl convert::Into<io::Error> for Error {
-    fn into(self) -> io::Error {
-        io::Error::new(self.io_kind(), self)
+impl convert::From<Error> for io::Error {
+    fn from(error: Error) -> io::Error {
+        io::Error::new(error.io_kind(), error)
     }
 }
 
