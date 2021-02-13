@@ -1,5 +1,6 @@
 #![allow(unknown_lints)]
 #![allow(bare_trait_objects)]
+#![allow(clippy::unnecessary_wraps)]
 
 extern crate bytes;
 extern crate clap;
