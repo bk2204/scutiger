@@ -1,0 +1,81 @@
+= Scutiger
+
+Scutiger is a collection of general-purpose Git utilities for people who use Git a lot.
+
+This crate provides the command-line utilities intended for use by users and for scripting purposes.
+
+== Included Utilities
+
+=== git at
+
+`git at` looks up the first commit on a branch with a commit message that matches a PCRE-compatible regular expression.
+Its primary purpose is to allow referencing commits for scripting, while having more power than the built-in `HEAD^{/pattern}` syntax.
+
+For example, in https://github.com/git.git[git.git], as of 2.21, output looks like this:
+
+[source,shell]
+----
+$ git at 'Git 2.20'
+b21ebb671bb7dea8d342225f0d66c41f4e54d5ca
+$ git at --show 'Git 2.20'
+commit b21ebb671bb7dea8d342225f0d66c41f4e54d5ca
+Merge: 85c26ae4bb 0d0ac3826a
+Author: Junio C Hamano <gitster@pobox.com>
+Date:   Sat Dec 15 13:00:25 2018 +0900
+
+    Sync with Git 2.20.1
+
+    * maint:
+      Git 2.20.1
+[…]
+$ git at --show maint 'Git 2.20'
+commit 0d0ac3826a3bbb9247e39e12623bbcfdd722f24c
+Author: Junio C Hamano <gitster@pobox.com>
+Date:   Sat Dec 15 12:31:34 2018 +0900
+
+    Git 2.20.1
+
+    Signed-off-by: Junio C Hamano <gitster@pobox.com>
+[…]
+----
+
+Essentially, you can specify an optional revision (defaulting to `HEAD`) and a regex to match.
+`--summary` limits the search to only the commit summary (i.e.  the first line).
+`--show` runs `git show` on the commit instead of printing the revision.
+
+=== git recent-refs
+
+`git recent-refs` lists the most recent references and commits that you've used.
+It can sort by the committer date (`--sort=committerdate`), author date (`--sort=authordate`), or the date that the commit was last checked out (`--sort=visitdate`).
+
+For example, an invocation might look like this:
+
+[source,shell]
+----
+$ git recent-refs --sort=visitdate
+refs/heads/master
+refs/heads/recent-branches
+4684bb27d8dcd7f0234b1ae9175457aaa80b1321
+7956da97faab4ba731873418ee2751f521cce718
+refs/heads/recent-branches
+refs/heads/master
+refs/heads/fixup
+refs/heads/master
+refs/heads/azure-pipelines
+refs/heads/master
+----
+
+=== git test-merge
+
+`git test-merge` takes two branches or other revisions and tries to perform a merge and exits successfully or unsuccessfully depending on whether it succeeded.
+If you pass `--write-tree` it writes the result of the merge into the repository and prints the tree to the output.
+
+For example, an invocation might look like this:
+
+[source,shell]
+----
+$ git test-merge --write-tree merge1 merge3
+ff2a880a0f65b9291dae1958f772a7b819e023c9
+$ git test-merge merge1 merge2
+fatal: merge conflict
+----
