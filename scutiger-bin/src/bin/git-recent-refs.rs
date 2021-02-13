@@ -11,6 +11,7 @@ extern crate scutiger_core;
 extern crate tempfile;
 
 mod libgit2;
+mod pager;
 
 #[cfg(test)]
 pub mod fixtures;
@@ -185,7 +186,8 @@ fn main() {
     let matches = app.get_matches();
     let repo = repo();
     let prog = program(&repo, &matches);
-    process::exit(prog.main(&mut io::stdout(), &mut io::stderr()));
+    let mut pager = pager::Pager::new(&repo).expect("unable to spawn pager");
+    process::exit(prog.main(&mut pager.stdout(), &mut io::stderr()));
 }
 
 #[cfg(test)]
