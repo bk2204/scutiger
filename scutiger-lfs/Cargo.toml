@@ -8,7 +8,6 @@ bytes = "0.4"
 clap = "^2.32"
 digest = "0.9"
 hex = "0.4"
-pcre2 = "^0.1"
 git2 = { version = "0.13", default-features = false }
 pkg-config = "^0.3"
 libc = "^0.2"

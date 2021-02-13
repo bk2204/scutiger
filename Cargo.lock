@@ -402,7 +402,6 @@ dependencies = [
  "git2",
  "hex",
  "libc",
- "pcre2",
  "pkg-config",
  "pretty_assertions",
  "scutiger-core",
