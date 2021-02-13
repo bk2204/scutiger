@@ -17,6 +17,16 @@ git test-merge::
   `git test-merge` takes two branches or other revisions and tries to perform a merge and exits successfully or unsuccessfully depending on whether it succeeded.
   If you pass `--write-tree` it writes the result of the merge into the repository and prints the tree to the output.
 
+== Included Git LFS-Specific Utilities
+
+The link:scutiger-lfs/[`scutiger-lfs`] crate provides Git LFS-specific utilities.
+The documentation for that crate describes each program in detail.
+
+git-lfs-transfer::
+  `git-lfs-transfer` provides an experimental server-side implementation of the proposed Git LFS pure SSH-based protocol.
+  This utility is intended to be invoked over SSH to transfer data from one repository to another.
+  https://github.com/git-lfs/git-lfs/blob/main/docs/proposals/ssh_adapter.md[The Git LFS documentation outlines the protocol.]
+
 == Building
 
 You will need Rust 1.41.1 or later, Cargo, GNU Make, and Git.

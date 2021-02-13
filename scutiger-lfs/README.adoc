@@ -1,0 +1,17 @@
+= Scutiger
+
+Scutiger is a collection of general-purpose Git utilities for people who use Git a lot.
+
+This crate provides the Git LFS-specific utilities.
+
+== Included Utilities
+
+=== git-lfs-transfer
+
+`git-lfs-transfer` provides an experimental server-side implementation of the proposed Git LFS pure SSH-based protocol.
+This utility is intended to be invoked over SSH to transfer data from one repository to another.
+https://github.com/git-lfs/git-lfs/blob/main/docs/proposals/ssh_adapter.md[The Git LFS documentation outlines the protocol.]
+
+At this moment, the implementation does not support locking and it remains experimental.
+
+It should be fully functional on Unix systems, with the normal Git-related exceptions about case-insensitive systems.
