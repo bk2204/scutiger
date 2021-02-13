@@ -37,5 +37,10 @@ jobs:
     - uses: actions/checkout@master
     - run: brew install ruby asciidoctor rust
     - run: make test-full
-
-
+  build-windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@master
+    - run: '(cd scutiger-lfs && cargo test && cargo build --release)'
+      shell: bash

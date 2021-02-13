@@ -14,4 +14,6 @@ https://github.com/git-lfs/git-lfs/blob/main/docs/proposals/ssh_adapter.md[The G
 
 At this moment, the implementation does not support locking and it remains experimental.
 
-It should be fully functional on Unix systems, with the normal Git-related exceptions about case-insensitive systems.
+This utility should be fully functional on Unix systems, with the normal Git-related exceptions about case-insensitive systems.
+It is tested to build on Windows only with a minimal stable Rust toolchain, provided Windows 10 with Developer Mode is used.
+https://github.com/bk2204/.github/blob/dev/SUPPORTED.adoc[The supported platforms policy] otherwise applies.
