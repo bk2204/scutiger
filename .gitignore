@@ -1,6 +1,7 @@
 # Build products.
 target/
 *.html
+*.md
 *.stamp
 # Tool output.
 *.bk

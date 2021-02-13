@@ -36,6 +36,11 @@ install: all
 		install -m 755 "$$i" "$(DESTDIR)/bin/$$(basename "$$i")"; \
 	done
 
+%.md: %.adoc
+	asciidoctor -o $@+ -b docbook5 $^
+	pandoc -f docbook -t commonmark -o $@ $@+
+	$(RM) $@+
+
 doc:
 	for i in doc/man/*.adoc; do \
 		asciidoctor -b manpage -a compat-mode $$i; \
@@ -50,6 +55,7 @@ clean:
 	done
 	rm -f $(DOCKER_FILES) $(DOCKER_STAMPS)
 	rm -fr tmp
+	rm -fr *.md *.md+ scutiger-*/*.md scutiger-*/*.md+
 	rm -fr doc/man/*.1
 
 linkage: tmp
