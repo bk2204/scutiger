@@ -272,8 +272,9 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
         }
     }
 
-    fn version(&self) -> Result<Status, Error> {
-        Ok(Status::success())
+    fn version(&mut self) -> Result<Status, Error> {
+        self.handler.read_to_flush()?;
+        Ok(Status::new_success(vec![]))
     }
 
     fn error(&self, code: u32, msg: &str) -> Result<Status, Error> {
@@ -800,7 +801,7 @@ mod tests {
     fn failed_verify() {
         let fixtures = TestRepository::new();
         let message = b"000eversion 1
-000abatch
+0000000abatch
 0011transfer=ssh
 001crefname=refs/heads/main
 000100476ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6
@@ -815,7 +816,7 @@ mod tests {
         let result = run(&fixtures, "upload", message).unwrap();
         let expected: &[u8] = b"000eversion=1
 0000000fstatus 200
-0000000fstatus 200
+00010000000fstatus 200
 0001004e6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6 upload
 004fce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626 32 upload
 0000000fstatus 200
@@ -829,7 +830,7 @@ mod tests {
     fn missing_object() {
         let fixtures = TestRepository::new();
         let message = b"000eversion 1
-000abatch
+0000000abatch
 0011transfer=ssh
 001crefname=refs/heads/main
 000100476ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6
@@ -844,7 +845,7 @@ mod tests {
         let result = run(&fixtures, "upload", message).unwrap();
         let expected: &[u8] = b"000eversion=1
 0000000fstatus 200
-0000000fstatus 200
+00010000000fstatus 200
 0001004e6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6 upload
 004fce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626 32 upload
 0000000fstatus 200
@@ -858,7 +859,7 @@ mod tests {
     fn simple_upload() {
         let fixtures = TestRepository::new();
         let message = b"000eversion 1
-000abatch
+0000000abatch
 0011transfer=ssh
 001crefname=refs/heads/main
 000100476ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6
@@ -884,7 +885,7 @@ mod tests {
         );
         let expected: &[u8] = b"000eversion=1
 0000000fstatus 200
-0000000fstatus 200
+00010000000fstatus 200
 0001004e6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6 upload
 004fce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626 32 upload
 0000000fstatus 200
@@ -899,7 +900,7 @@ mod tests {
     fn simple_download() {
         let fixtures = TestRepository::new();
         let message = b"000eversion 1
-000abatch
+0000000abatch
 0011transfer=ssh
 001crefname=refs/heads/main
 000100476ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6
@@ -912,7 +913,7 @@ mod tests {
         let result = run(&fixtures, "upload", message).unwrap();
         let expected: &[u8] = b"000eversion=1
 0000000fstatus 200
-0000000fstatus 200
+00010000000fstatus 200
 0001004e6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6 upload
 004fce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626 32 upload
 0000000fstatus 200
@@ -921,7 +922,7 @@ mod tests {
         assert_eq!(result, expected);
 
         let message = b"000eversion 1
-000abatch
+0000000abatch
 0011transfer=ssh
 001crefname=refs/heads/main
 000100476ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6
@@ -936,7 +937,7 @@ mod tests {
         );
         let expected: &[u8] = b"000eversion=1
 0000000fstatus 200
-0000000fstatus 200
+00010000000fstatus 200
 0001004c6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6 noop
 0051ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626 32 download
 0000000fstatus 200
@@ -950,7 +951,7 @@ mod tests {
     fn invalid_upload() {
         let fixtures = TestRepository::new();
         let message = b"000eversion 1
-000abatch
+0000000abatch
 0011transfer=ssh
 001crefname=refs/heads/main
 000100476ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6
@@ -983,7 +984,7 @@ mod tests {
 
         let expected: &[u8] = b"000eversion=1
 0000000fstatus 200
-0000000fstatus 200
+00010000000fstatus 200
 0001004e6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6 upload
 004fce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626 32 upload
 0000000fstatus 200
