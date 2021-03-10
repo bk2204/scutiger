@@ -105,10 +105,7 @@ impl Error {
     ) -> Self {
         Error {
             kind,
-            internal: match error {
-                Some(e) => Some(e.into()),
-                None => None,
-            },
+            internal: error.map(|e| e.into()),
             message: None,
         }
     }
