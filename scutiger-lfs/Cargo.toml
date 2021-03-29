@@ -22,7 +22,7 @@ hex = "0.4"
 git2 = { version = "0.13", default-features = false }
 pkg-config = "^0.3"
 libc = "^0.2"
-scutiger-core = { path = "../scutiger-core", version = "0.0.1" }
+scutiger-core = { path = "../scutiger-core", version = "0.0.1", features = [] }
 sha2 = "0.9"
 tempfile = "3"
 

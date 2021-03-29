@@ -14,9 +14,12 @@ include = [
 ]
 
 [dependencies]
-pcre2 = "^0.1"
+pcre2 = { version = "^0.1", optional = true }
 git2 = { version = "0.13", default-features = false }
 pkg-config = "^0.3"
 
 [dev-dependencies]
 tempfile = "3"
+
+[features]
+pcre = ["pcre2"]

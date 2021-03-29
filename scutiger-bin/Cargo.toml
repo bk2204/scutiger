@@ -22,7 +22,7 @@ libc = "^0.2"
 # it.
 git2 = { version = "0.13", default-features = false }
 pkg-config = "^0.3"
-scutiger-core = { path = "../scutiger-core", version = "0.0.1" }
+scutiger-core = { path = "../scutiger-core", version = "0.0.1", features = ["pcre"] }
 
 [dev-dependencies]
 tempfile = "3"

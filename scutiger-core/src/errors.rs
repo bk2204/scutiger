@@ -8,6 +8,7 @@ use std::fmt;
 use std::io;
 
 use git2;
+#[cfg(feature = "pcre")]
 use pcre2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -182,6 +183,7 @@ impl convert::From<git2::Error> for Error {
     }
 }
 
+#[cfg(feature = "pcre")]
 impl convert::From<pcre2::Error> for Error {
     fn from(error: pcre2::Error) -> Self {
         Error::new(ErrorKind::PCREError, Some(error))
