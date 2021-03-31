@@ -25,6 +25,7 @@ libc = "^0.2"
 scutiger-core = { path = "../scutiger-core", version = "0.0.1", features = [] }
 sha2 = "0.9"
 tempfile = "3"
+chrono = "^0.4"
 
 [dev-dependencies]
 pretty_assertions = "0.6"

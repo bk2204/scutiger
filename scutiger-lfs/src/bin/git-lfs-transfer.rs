@@ -2,8 +2,10 @@
 #![allow(bare_trait_objects)]
 #![allow(clippy::unnecessary_wraps)]
 #![allow(clippy::match_like_matches_macro)]
+#![allow(clippy::mutable_key_type)]
 
 extern crate bytes;
+extern crate chrono;
 extern crate clap;
 extern crate digest;
 extern crate git2;
@@ -17,7 +19,8 @@ extern crate tempfile;
 #[macro_use]
 extern crate pretty_assertions;
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
+use chrono::{TimeZone, Utc};
 use clap::{App, Arg, ArgMatches};
 use digest::Digest;
 use git2::Repository;
@@ -29,11 +32,12 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
 use std::io;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::str::FromStr;
+use std::time::SystemTime;
 use tempfile::Builder;
 
 struct PktLineHandler<R: io::Read, W: io::Write> {
@@ -221,6 +225,24 @@ impl Status {
         }
     }
 
+    fn new_success_with_code(code: u32, args: Vec<Bytes>) -> Status {
+        Status {
+            code,
+            args: Some(args),
+            messages: None,
+            reader: None,
+        }
+    }
+
+    fn new_success_with_data(code: u32, args: Vec<Bytes>, messages: Vec<Bytes>) -> Status {
+        Status {
+            code,
+            args: Some(args),
+            messages: Some(messages),
+            reader: None,
+        }
+    }
+
     fn new_reader(args: Vec<Bytes>, reader: Box<io::Read>) -> Status {
         Status {
             code: 200,
@@ -238,11 +260,341 @@ impl Status {
             reader: None,
         }
     }
+
+    fn new_failure_with_args(code: u32, args: Vec<Bytes>, message: &[u8]) -> Status {
+        Status {
+            code,
+            args: Some(args),
+            messages: Some(vec![message.into()]),
+            reader: None,
+        }
+    }
 }
 
 impl FromIterator<Bytes> for Status {
     fn from_iter<I: IntoIterator<Item = Bytes>>(iter: I) -> Self {
         Self::new_success(iter.into_iter().collect())
+    }
+}
+
+struct LockFile {
+    path: PathBuf,
+    temp: PathBuf,
+}
+
+impl LockFile {
+    fn new(path: &Path) -> Result<LockFile, Error> {
+        let mut temp = path.to_owned();
+        temp.set_extension("lock");
+        Ok(LockFile {
+            path: path.to_owned(),
+            temp,
+        })
+    }
+
+    fn write(&self, data: &[u8]) -> Result<(), Error> {
+        let mut f = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&self.temp)
+        {
+            Ok(f) => f,
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                return Err(Error::new_simple(ErrorKind::Conflict))
+            }
+            Err(e) => return Err(e.into()),
+        };
+        f.write_all(&data)?;
+        f.flush()?;
+        drop(f);
+        Ok(())
+    }
+
+    #[allow(unused_must_use)]
+    fn persist(self) -> Result<(), Error> {
+        match fs::hard_link(&self.temp, &self.path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                Err(Error::new_simple(ErrorKind::Conflict))
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
+}
+
+impl Drop for LockFile {
+    #[allow(unused_must_use)]
+    fn drop(&mut self) {
+        // We don't care if the file removal failed.  We did the best we could.
+        fs::remove_file(&self.temp);
+    }
+}
+
+struct Lock {
+    root: PathBuf,
+    path_name: Bytes,
+    time: i64,
+    ownername: String,
+}
+
+impl Lock {
+    const VERSION: &'static str = "v1";
+
+    fn new(root: PathBuf, path: Bytes, time: i64) -> Result<Lock, Error> {
+        let id = Self::hash_for(&path);
+        let mut b: BytesMut = format!("{}:{}:", Self::VERSION, time).into();
+        b.extend_from_slice(&path);
+        let mut filename = root.clone();
+        filename.push(id);
+        let lock = LockFile::new(&filename)?;
+        lock.write(&b)?;
+        lock.persist()?;
+        let user = Self::user_for_file(&filename).unwrap_or_else(|_| "unknown".into());
+        Ok(Lock {
+            root,
+            path_name: path,
+            time,
+            ownername: user,
+        })
+    }
+
+    fn from_path(root: PathBuf, path: &Bytes) -> Result<Option<Lock>, Error> {
+        let id = Self::hash_for(path);
+        match Self::from_id(root, &id) {
+            Ok(None) => Ok(None),
+            Ok(Some(l)) if l.path() != path => {
+                // This should never happen except with corruption, since otherwise we'd need a
+                // collision of SHA-256.
+                Err(Error::from_message(
+                    ErrorKind::CorruptData,
+                    "unexpected filename in parsed lock",
+                ))
+            }
+            Ok(Some(l)) => Ok(Some(l)),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn from_id(root: PathBuf, path: &str) -> Result<Option<Lock>, Error> {
+        let mut filename = root.clone();
+        filename.push(path);
+        let mut f = match fs::OpenOptions::new().read(true).open(&filename) {
+            Ok(f) => f,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+        let mut v = Vec::new();
+        f.read_to_end(&mut v)?;
+        let user = Self::user_for_file(&filename).unwrap_or_else(|_| "unknown".into());
+        let (time, parsed_path) = match Self::parse(v) {
+            Some(x) => x,
+            None => {
+                return Err(Error::from_message(
+                    ErrorKind::CorruptData,
+                    "invalid parsed lock",
+                ))
+            }
+        };
+        Ok(Some(Lock {
+            root,
+            path_name: parsed_path,
+            time,
+            ownername: user,
+        }))
+    }
+
+    fn unlock(self) -> Result<(), Error> {
+        let id = Self::hash_for(&self.path_name);
+        let mut filename = self.root;
+        filename.push(id);
+        fs::remove_file(&filename)?;
+        Ok(())
+    }
+
+    fn parse(data: Vec<u8>) -> Option<(i64, Bytes)> {
+        let v: Vec<Vec<u8>> = data.splitn(3, |&x| x == b':').map(|x| x.into()).collect();
+        if v.len() != 3 || v[0] != Self::VERSION.as_bytes() {
+            return None;
+        }
+        let s: String = String::from_utf8(v[1].clone()).ok()?;
+        let time = s.parse().ok()?;
+        Some((time, v[2].clone().into()))
+    }
+
+    fn path(&self) -> Bytes {
+        self.path_name.clone()
+    }
+
+    fn id(&self) -> String {
+        Self::hash_for(&self.path_name)
+    }
+
+    fn formatted_timestamp(&self) -> String {
+        Utc.timestamp(self.time, 0).to_rfc3339()
+    }
+
+    fn ownername(&self) -> &str {
+        &self.ownername
+    }
+
+    fn hash_for(path: &Bytes) -> String {
+        let mut hash = Sha256::new();
+        hash.update(Self::VERSION.as_bytes());
+        hash.update(b":");
+        hash.update(&path);
+        hex::encode(hash.finalize())
+    }
+
+    fn as_lock_spec(&self, owner_id: bool) -> Result<Vec<Bytes>, Error> {
+        let id = Self::hash_for(&self.path_name);
+        let mut v = vec![
+            format!("lock {}\n", id).as_bytes().into(),
+            ([b"path ", id.as_bytes(), b" ", &self.path_name, b"\n"])
+                .join(b"" as &[u8])
+                .into(),
+            format!("locked-at {} {}\n", id, self.formatted_timestamp())
+                .as_bytes()
+                .into(),
+            format!("ownername {} {}\n", id, self.ownername())
+                .as_bytes()
+                .into(),
+        ];
+        if owner_id {
+            let user = self.current_user()?;
+            let who = if user == self.ownername() {
+                "ours"
+            } else {
+                "theirs"
+            };
+            v.push(format!("owner {} {}\n", id, who).as_bytes().into());
+        }
+        Ok(v)
+    }
+
+    fn as_arguments(&self) -> Vec<Bytes> {
+        let mut b = BytesMut::new();
+        b.extend_from_slice(b"path=");
+        b.extend_from_slice(&self.path());
+        b.extend_from_slice(b"\n");
+        vec![
+            format!("id={}\n", self.id()).into(),
+            b.into(),
+            format!("locked-at={}\n", self.formatted_timestamp()).into(),
+            format!("ownername={}\n", self.ownername()).into(),
+        ]
+    }
+
+    #[cfg(all(windows, not(test)))]
+    fn user_for_file(path: &Path) -> Result<String, Error> {
+        Ok("unknown".into())
+    }
+
+    #[cfg(all(unix, not(test)))]
+    fn user_for_file(path: &Path) -> Result<String, Error> {
+        use std::os::unix::fs::MetadataExt;
+        let st = fs::metadata(path)?;
+        Ok(format!("uid {}", st.uid()))
+    }
+
+    #[cfg(test)]
+    fn user_for_file(path: &Path) -> Result<String, Error> {
+        if path.ends_with("0") {
+            Ok("other user".into())
+        } else {
+            Ok("test user".into())
+        }
+    }
+
+    fn current_user(&self) -> Result<String, Error> {
+        // XXX: This is ugly.  We don't have a good way to read the user database in a portable
+        // way, and we don't have a good way to find out the current user, since Rust unfortunately
+        // doesn't offer this functionality.  There don't appear to be a lot of good, portable
+        // crate options, either.  As a result, we create a temporary file and find the user ID
+        // that way.
+        let temp_path = Builder::new()
+            .rand_bytes(12)
+            .suffix(".temp")
+            .tempfile_in(&self.root)?
+            .into_temp_path();
+        Self::user_for_file(&temp_path)
+    }
+}
+
+struct LockSetIterator {
+    data: Vec<fs::DirEntry>,
+    err: Option<Error>,
+    item: usize,
+    done: bool,
+}
+
+impl LockSetIterator {
+    fn new(path: &Path) -> LockSetIterator {
+        let data: Result<Vec<fs::DirEntry>, io::Error> = match fs::read_dir(path) {
+            Ok(iter) => iter.collect(),
+            Err(e) => Err(e),
+        };
+        let (data, err) = match data {
+            Ok(mut v) => {
+                v.sort_by_key(fs::DirEntry::file_name);
+                (v, None)
+            }
+            Err(e) => (vec![], Some(e.into())),
+        };
+        LockSetIterator {
+            data,
+            err,
+            item: 0,
+            done: false,
+        }
+    }
+}
+
+impl Iterator for LockSetIterator {
+    type Item = Result<Lock, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match (self.err.take(), self.done) {
+            (_, true) => None,
+            (Some(e), false) => {
+                self.done = true;
+                Some(Err(e))
+            }
+            (None, false) => {
+                while self.item < self.data.len() {
+                    let pos = self.item;
+                    self.item += 1;
+                    let item = &self.data[pos];
+                    let path = item.path();
+                    let root = match path.parent() {
+                        Some(r) => r,
+                        None => continue,
+                    };
+                    let filename = item.file_name();
+                    let filename = filename.to_string_lossy();
+                    match Lock::from_id(root.to_path_buf(), &filename) {
+                        Ok(Some(l)) => return Some(Ok(l)),
+                        _ => continue,
+                    };
+                }
+                None
+            }
+        }
+    }
+}
+
+struct LockSet {
+    path: PathBuf,
+}
+
+impl LockSet {
+    fn new(path: &Path) -> LockSet {
+        LockSet {
+            path: path.to_owned(),
+        }
+    }
+
+    fn iter(&self) -> LockSetIterator {
+        LockSetIterator::new(&self.path)
     }
 }
 
@@ -313,15 +665,28 @@ struct Processor<'a, R: io::Read, W: io::Write> {
     handler: PktLineHandler<R, W>,
     lfs_path: &'a Path,
     umask: u32,
+    timestamp: Option<i64>,
 }
 
 impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
-    fn new(handler: PktLineHandler<R, W>, lfs_path: &'a Path, umask: u32) -> Self {
+    fn new(
+        handler: PktLineHandler<R, W>,
+        lfs_path: &'a Path,
+        umask: u32,
+        timestamp: Option<i64>,
+    ) -> Self {
         Processor {
             handler,
             lfs_path,
             umask,
+            timestamp,
         }
+    }
+
+    fn lock_path(&self) -> PathBuf {
+        let mut buf = PathBuf::from(self.lfs_path);
+        buf.push("locks");
+        buf
     }
 
     fn version(&mut self) -> Result<Status, Error> {
@@ -422,10 +787,12 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
         let args = ArgumentParser::parse(args)?;
         let size = match args.get(b"size" as &[u8]) {
             Some(x) => x,
-            None => return Err(Error::from_message(
-                ErrorKind::MissingData,
-                "missing required size header",
-            )),
+            None => {
+                return Err(Error::from_message(
+                    ErrorKind::MissingData,
+                    "missing required size header",
+                ))
+            }
         };
         ArgumentParser::parse_integer(&size)
     }
@@ -528,6 +895,147 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
         Ok(Status::new_reader(args, Box::new(file)))
     }
 
+    fn lock(&mut self) -> Result<Status, Error> {
+        let data = match self.handler.read_to_flush() {
+            Ok(v) => v,
+            Err(e) => return Err(Error::new(ErrorKind::ParseError, Some(e))),
+        };
+        let args = ArgumentParser::parse(&data)?;
+        let path = args.get(b"path" as &[u8]);
+        let refname = args.get(b"refname" as &[u8]);
+        let path = match (path, refname) {
+            (Some(path), Some(_)) => path,
+            (_, _) => {
+                return Err(Error::from_message(
+                    ErrorKind::MissingData,
+                    "both path and refname required",
+                ))
+            }
+        };
+        let now = self.timestamp.unwrap_or_else(|| {
+            match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                Ok(d) => d.as_secs() as i64,
+                Err(e) => -(e.duration().as_secs() as i64),
+            }
+        });
+        let mut retried = false;
+        while !retried {
+            let (ok, lock) = match Lock::new(self.lock_path(), path.clone(), now) {
+                Ok(l) => (true, l),
+                Err(e) if e.kind() == ErrorKind::Conflict => {
+                    match Lock::from_path(self.lock_path(), &path) {
+                        Ok(Some(l)) => (false, l),
+                        Ok(None) => {
+                            retried = true;
+                            continue;
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+                Err(e) => return Err(e),
+            };
+            return if ok {
+                Ok(Status::new_success_with_code(201, lock.as_arguments()))
+            } else {
+                Ok(Status::new_failure_with_args(
+                    409,
+                    lock.as_arguments(),
+                    b"conflict",
+                ))
+            };
+        }
+        unreachable!()
+    }
+
+    fn list_locks_for_path(
+        &mut self,
+        path: &Bytes,
+        cursor: Option<&Bytes>,
+        use_owner_id: bool,
+    ) -> Result<Status, Error> {
+        match (Lock::from_path(self.lock_path(), path), cursor) {
+            (Err(e), _) => Err(e),
+            (Ok(None), _) => self.error(404, "not found"),
+            (Ok(Some(l)), Some(id)) if l.id().as_bytes() < id => self.error(404, "not found"),
+            (Ok(Some(l)), _) => l.as_lock_spec(use_owner_id).map(Status::new_success),
+        }
+    }
+
+    fn list_locks(&mut self, use_owner_id: bool) -> Result<Status, Error> {
+        let args = match self.handler.read_to_flush() {
+            Ok(v) => v,
+            Err(e) => return Err(Error::new(ErrorKind::ParseError, Some(e))),
+        };
+        let args = ArgumentParser::parse(&args)?;
+        let mut limit = args
+            .get(b"limit" as &[u8])
+            .map(|x| ArgumentParser::parse_integer(&x))
+            .unwrap_or(Ok(100))?;
+        if limit == 0 {
+            return Err(Error::from_message(
+                ErrorKind::NotAllowed,
+                "bizarre request for no data",
+            ));
+        } else if limit > 100 {
+            // Let's prevent the user from trying to DoS us.
+            limit = 100
+        }
+        let cursor = args.get(b"cursor" as &[u8]);
+        if let Some(path) = args.get(b"path" as &[u8]) {
+            return self.list_locks_for_path(path, cursor, use_owner_id);
+        };
+        let lock_path = self.lock_path();
+        let r: Result<Vec<_>, _> = LockSet::new(&lock_path)
+            .iter()
+            .skip_while(|item| match (item, cursor) {
+                (Err(_), _) => false,
+                (Ok(l), Some(cursor)) => l.id().as_bytes() < cursor,
+                (Ok(_), None) => false,
+            })
+            .take(limit + 1)
+            .collect();
+        let items = r?;
+        let lock_specs: Result<Vec<_>, _> =
+            items.iter().map(|l| l.as_lock_spec(use_owner_id)).collect();
+        let lock_specs = lock_specs?.iter().flatten().cloned().collect();
+        let next_cursor: Vec<Bytes> = if items.len() == limit + 1 {
+            vec![format!("next-cursor={}\n", items[limit].id()).into()]
+        } else {
+            vec![]
+        };
+        Ok(Status::new_success_with_data(200, next_cursor, lock_specs))
+    }
+
+    fn unlock(&mut self, id: &[u8]) -> Result<Status, Error> {
+        self.handler.read_to_flush()?;
+        let s = match std::str::from_utf8(id) {
+            Ok(s) => s,
+            Err(_) => {
+                return Err(Error::from_message(
+                    ErrorKind::CorruptData,
+                    "invalid or corrupt ID",
+                ))
+            }
+        };
+        match Lock::from_id(self.lock_path(), s) {
+            Ok(Some(l)) => {
+                let args = l.as_arguments();
+                match l.unlock() {
+                    Ok(()) => Ok(Status::new_success_with_code(200, args)),
+                    Err(e) if e.io_kind() == io::ErrorKind::NotFound => {
+                        self.error(404, "not found")
+                    }
+                    Err(e) if e.io_kind() == io::ErrorKind::PermissionDenied => {
+                        self.error(403, "forbidden")
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+            Ok(None) => self.error(404, "not found"),
+            Err(e) => Err(e),
+        }
+    }
+
     fn process_commands(&mut self, mode: Mode) -> Result<(), Error> {
         loop {
             let pkt = match self.handler.rdr.read_packet() {
@@ -564,6 +1072,10 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
                 (b"verify-object", Some(_), _) => self.error(403, "not allowed"),
                 (b"get-object", Some(oid), Mode::Download) => self.get_object(oid),
                 (b"get-object", Some(_), _) => self.error(403, "not allowed"),
+                (b"lock", None, Mode::Upload) => self.lock(),
+                (b"list-lock", None, Mode::Download) => self.list_locks(false),
+                (b"list-lock", None, Mode::Upload) => self.list_locks(true),
+                (b"unlock", Some(id), Mode::Upload) => self.unlock(id),
                 (b"quit", None, _) => {
                     self.handler.send_status(Status::success())?;
                     return Ok(());
@@ -581,6 +1093,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
                     | ErrorKind::MissingData
                     | ErrorKind::ExtraData
                     | ErrorKind::CorruptData
+                    | ErrorKind::NotAllowed
                     | ErrorKind::UnknownCommand => self
                         .handler
                         .send_status(Status::new_failure(400, format!("error: {}", e).as_bytes())),
@@ -629,11 +1142,12 @@ impl<'p> Program<'p> {
         input: &mut R,
         output: &mut O,
         _error: &mut E,
+        timestamp: Option<i64>,
     ) -> Result<(), Error> {
         self.create_directories()?;
         let mut handler = PktLineHandler::new(input, output);
         self.send_capabilities(&mut handler)?;
-        let mut processor = Processor::new(handler, &self.lfs_path, self.umask);
+        let mut processor = Processor::new(handler, &self.lfs_path, self.umask, timestamp);
         match self.operation.as_str() {
             "upload" => processor.process_commands(Mode::Upload),
             "download" => processor.process_commands(Mode::Download),
@@ -651,7 +1165,7 @@ impl<'p> Program<'p> {
     }
 
     fn create_directories(&self) -> Result<(), Error> {
-        for dir in &["objects", "incomplete", "tmp"] {
+        for dir in &["objects", "incomplete", "tmp", "locks"] {
             let mut path = self.lfs_path.clone();
             path.push(dir);
             fs::create_dir_all(path)?;
@@ -702,7 +1216,7 @@ impl<'p> Program<'p> {
         error: &mut E,
     ) -> Result<(), Error> {
         self.umask = self.set_permissions()?;
-        self.run(input, output, error)
+        self.run(input, output, error, None)
     }
 
     /// Runs this main program and generate output and error codes.
@@ -798,7 +1312,12 @@ mod tests {
         let mut input = io::Cursor::new(transcript);
         let mut output = io::Cursor::new(Vec::new());
         let mut error = io::Cursor::new(Vec::new());
-        Program::new(&fixtures.repo, operation.into()).run(&mut input, &mut output, &mut error)?;
+        Program::new(&fixtures.repo, operation.into()).run(
+            &mut input,
+            &mut output,
+            &mut error,
+            Some(1000684800),
+        )?;
         Ok(output.into_inner())
     }
 
@@ -1025,6 +1544,48 @@ mod tests {
 000100acerror: corrupt data: expected oid ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626, got 367988c7cb91e13beda0a15fb271afcbf02fa7a0e75d9e25ac50b2b4b38af5f50000000fstatus 200
 0000000fstatus 404
 0001000dnot found0000";
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn simple_locking() {
+        let fixtures = TestRepository::new();
+        let message = b"000eversion 1
+00000009lock
+000dpath=foo
+001crefname=refs/heads/main
+00000009lock
+000dpath=foo
+001crefname=refs/heads/main
+0000000elist-lock
+000elimit=100
+0000004cunlock d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28
+0000";
+        let result = run(&fixtures, "upload", message).unwrap();
+        let expected: &[u8] = b"000eversion=1
+0000000fstatus 200
+00010000000fstatus 201
+0048id=d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28
+000dpath=foo
+0028locked-at=2001-09-17T00:00:00+00:00
+0018ownername=test user
+0000000fstatus 409
+0048id=d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28
+000dpath=foo
+0028locked-at=2001-09-17T00:00:00+00:00
+0018ownername=test user
+0001000cconflict0000000fstatus 200
+0001004alock d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28
+004epath d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28 foo
+0069locked-at d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28 2001-09-17T00:00:00+00:00
+0059ownername d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28 test user
+0050owner d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28 ours
+0000000fstatus 200
+0048id=d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28
+000dpath=foo
+0028locked-at=2001-09-17T00:00:00+00:00
+0018ownername=test user
+0000";
         assert_eq!(result, expected);
     }
 }

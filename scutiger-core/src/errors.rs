@@ -37,6 +37,7 @@ pub enum ErrorKind {
     ExtraData,
     CorruptData,
     NotAllowed,
+    InvalidPath,
 }
 
 #[derive(Debug)]
@@ -52,7 +53,7 @@ impl fmt::Display for Error {
             // Despite the text, this is not a fatal error in our sense. For compatibility with
             // Git, however, we choose to preserve the same wording.
             ErrorKind::NoSuchRevision => write!(f, "fatal: needed a single revision"),
-            ErrorKind::Conflict => write!(f, "fatal: merge conflict"),
+            ErrorKind::Conflict => write!(f, "fatal: conflict"),
             ErrorKind::PCREError => match self.internal {
                 Some(ref e) => write!(f, "fatal: invalid regular expression: {}", e),
                 None => write!(f, "fatal: invalid regular expression"),
@@ -76,6 +77,7 @@ impl fmt::Display for Error {
             ErrorKind::ExtraData => write!(f, "extra data"),
             ErrorKind::CorruptData => write!(f, "corrupt data"),
             ErrorKind::NotAllowed => write!(f, "not allowed"),
+            ErrorKind::InvalidPath => write!(f, "invalid path"),
         }?;
         if let Some(ref msg) = self.message {
             write!(f, ": {}", msg)?;
