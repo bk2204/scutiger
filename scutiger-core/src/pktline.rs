@@ -175,6 +175,7 @@ impl<W: io::Write> Writer<W> {
         match pkt.packet_type() {
             PacketType::Flush => {
                 self.writer.write_all(b"0000")?;
+                self.writer.flush()?;
                 Ok(4)
             }
             PacketType::Delim => {
