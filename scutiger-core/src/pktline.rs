@@ -53,6 +53,7 @@ impl Packet {
 pub struct Reader<R: io::Read> {
     rdr: R,
     buf: [u8; 65536],
+    off: usize,
     len: usize,
 }
 
@@ -63,6 +64,7 @@ impl<R: io::Read> Reader<R> {
         Reader {
             rdr,
             buf: [0u8; 65536],
+            off: 0,
             len: 0,
         }
     }
@@ -124,10 +126,15 @@ impl<R: io::Read> Reader<R> {
 
 impl<R: io::Read> io::Read for Reader<R> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
-        let n = cmp::min(self.len, buf.len());
+        let n = cmp::min(self.len - self.off, buf.len());
         if n > 0 {
-            buf.copy_from_slice(&self.buf[0..n]);
-            self.len -= n;
+            buf[0..n].copy_from_slice(&self.buf[self.off..self.off + n]);
+            if n == self.len - self.off {
+                self.off = 0;
+                self.len = 0;
+            } else {
+                self.off += n;
+            }
             return Ok(n);
         }
         loop {
@@ -145,9 +152,11 @@ impl<R: io::Read> io::Read for Reader<R> {
                 (Err(e), _) => return Err(e.into()),
             };
             if n > 0 {
-                let n = cmp::min(n, buf.len());
-                buf[0..n].copy_from_slice(&self.buf[0..n]);
-                return Ok(n);
+                let c = cmp::min(n, buf.len());
+                buf[0..c].copy_from_slice(&self.buf[0..c]);
+                self.len = n;
+                self.off = c;
+                return Ok(c);
             }
         }
     }
@@ -284,6 +293,12 @@ mod tests {
         }
     }
 
+    fn pattern_of_size(n: usize) -> Vec<u8> {
+        (0..n)
+            .map(|x| (x + (x >> 8) + (x >> 16) + (x >> 24)) as u8)
+            .collect()
+    }
+
     #[test]
     fn pktline_headers() {
         assert_eq!(Reader::<io::Cursor<&[u8]>>::parse_header(*b"0000"), Ok(0));
@@ -340,11 +355,32 @@ mod tests {
     #[test]
     fn write_data_large() {
         let mut wrtr = writer();
-        let buf = vec![0xff; 65536];
+        let buf = pattern_of_size(65536);
         let expected: [&[u8]; 4] = [b"fff0", &buf[0..65516], b"0018", &buf[65516..65536]];
         let expected = expected.concat();
         wrtr.write(&buf).unwrap();
         wrtr.flush().unwrap();
         assert_eq!(expected, wrtr.writer.into_inner());
+    }
+
+    #[test]
+    fn read_data_large() {
+        let buf = pattern_of_size(1048576);
+        for chunk_size in &[10, 17, 2204, 32768, 32771, 65516] {
+            let mut input: Vec<u8> = buf
+                .chunks(*chunk_size)
+                .flat_map(|x| {
+                    let mut vec = format!("{:04x}", x.len() + 4).as_bytes().to_vec();
+                    vec.extend(x);
+                    vec
+                })
+                .collect();
+            input.extend(b"0000");
+            let mut rdr = reader_from_buf(&input);
+            let mut cursor = io::Cursor::new(Vec::new());
+            io::copy(&mut rdr, &mut cursor).unwrap();
+            let actual = cursor.into_inner();
+            assert_eq!(buf, actual);
+        }
     }
 }
