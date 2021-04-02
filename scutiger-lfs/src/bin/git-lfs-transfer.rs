@@ -366,6 +366,35 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
         Ok(Status::success())
     }
 
+    fn size_from_arguments(args: &[Bytes]) -> Result<u64, Error> {
+        let prefix: &[u8] = b"size=";
+        for item in args {
+            if !item.starts_with(prefix) {
+                continue;
+            }
+            if item[item.len() - 1] != b'\n' {
+                return Err(Error::from_message(
+                    ErrorKind::ParseError,
+                    "unexpected value parsing size header",
+                ));
+            }
+            let ssize = &item[prefix.len()..item.len() - 1];
+            match String::from_utf8_lossy(ssize).parse() {
+                Ok(x) => return Ok(x),
+                Err(_) => {
+                    return Err(Error::from_message(
+                        ErrorKind::InvalidInteger,
+                        format!("unexpected value parsing size header: {:?}", item),
+                    ))
+                }
+            }
+        }
+        Err(Error::from_message(
+            ErrorKind::MissingData,
+            "missing required size header",
+        ))
+    }
+
     fn put_object(&mut self, oid: &[u8]) -> Result<Status, Error> {
         let oid = Oid::new(oid)?;
         let mut tempdir: PathBuf = self.lfs_path.into();
@@ -375,35 +404,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
             .rand_bytes(12)
             .tempfile_in(&tempdir)?;
         let expected_size = match self.handler.read_to_delim() {
-            Ok(vec) => {
-                let prefix: &[u8] = b"size=";
-                if vec.len() != 1 {
-                    return Err(Error::from_message(
-                        ErrorKind::ParseError,
-                        "unexpected number of arguments",
-                    ));
-                }
-                let item = &vec[0];
-                if item.len() < prefix.len()
-                    || &item[0..prefix.len()] != prefix
-                    || item[item.len() - 1] != b'\n'
-                {
-                    return Err(Error::from_message(
-                        ErrorKind::ParseError,
-                        "unexpected value parsing size header",
-                    ));
-                }
-                let ssize = &item[prefix.len()..item.len() - 1];
-                match String::from_utf8_lossy(ssize).parse() {
-                    Ok(x) => x,
-                    Err(_) => {
-                        return Err(Error::from_message(
-                            ErrorKind::InvalidInteger,
-                            format!("unexpected value parsing size header: {:?}", item),
-                        ))
-                    }
-                }
-            }
+            Ok(vec) => Self::size_from_arguments(&vec)?,
             Err(e) => return Err(Error::new(ErrorKind::ParseError, Some(e))),
         };
         let mut rdr = HashingReader::new(&mut self.handler.rdr, Sha256::new());
@@ -450,24 +451,10 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
         self.fix_permissions(&dest_path)
     }
 
-    fn verify_object(&mut self, oid: &[u8], size: Option<&&[u8]>) -> Result<Status, Error> {
-        let size = match size {
-            Some(v) => v,
-            None => return self.error(400, "missing size"),
-        };
-        match self.handler.read_to_flush() {
-            Ok(v) if v.is_empty() => (),
-            Ok(_) => {
-                return Err(Error::from_message(
-                    ErrorKind::ParseError,
-                    "unexpected number of arguments",
-                ))
-            }
+    fn verify_object(&mut self, oid: &[u8]) -> Result<Status, Error> {
+        let expected_size = match self.handler.read_to_flush() {
+            Ok(vec) => Self::size_from_arguments(&vec)?,
             Err(e) => return Err(Error::new(ErrorKind::ParseError, Some(e))),
-        };
-        let expected_size = match String::from_utf8_lossy(size).parse() {
-            Ok(x) => x,
-            Err(_) => return Err(Error::new_simple(ErrorKind::InvalidInteger)),
         };
         let oid = Oid::new(oid)?;
         let path = oid.expected_path(&self.lfs_path);
@@ -538,7 +525,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
                 (b"batch", None, Mode::Download) => self.download_batch(),
                 (b"put-object", Some(oid), Mode::Upload) => self.put_object(oid),
                 (b"put-object", Some(_), _) => self.error(403, "not allowed"),
-                (b"verify-object", Some(oid), Mode::Upload) => self.verify_object(oid, msgs.get(2)),
+                (b"verify-object", Some(oid), Mode::Upload) => self.verify_object(oid),
                 (b"verify-object", Some(_), _) => self.error(403, "not allowed"),
                 (b"get-object", Some(oid), Mode::Download) => self.get_object(oid),
                 (b"get-object", Some(_), _) => self.error(403, "not allowed"),
@@ -815,7 +802,8 @@ mod tests {
 0001000aabc12300000050put-object ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626
 000csize=32
 00010024This is\x00a complicated\xc2\xa9message.
-00000055verify-object 6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 5
+00000053verify-object 6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090
+000bsize=5
 0000";
         let result = run(&fixtures, "upload", message).unwrap();
         let expected: &[u8] = b"000eversion=1
@@ -844,7 +832,8 @@ mod tests {
 0001000aabc12300000050put-object ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626
 000csize=32
 00010024This is\x00a complicated\xc2\xa9message.
-00000055verify-object 0000000000000000000000000000000000000000000000000000000000000000 5
+00000053verify-object 0000000000000000000000000000000000000000000000000000000000000000
+000bsize=5
 0000";
         let result = run(&fixtures, "upload", message).unwrap();
         let expected: &[u8] = b"000eversion=1
@@ -873,8 +862,10 @@ mod tests {
 0001000aabc12300000050put-object ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626
 000csize=32
 00010024This is\x00a complicated\xc2\xa9message.
-00000055verify-object 6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6
-00000056verify-object ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626 32
+00000053verify-object 6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090
+000bsize=6
+00000053verify-object ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626
+000csize=32
 0000";
         let result = run(&fixtures, "upload", message).unwrap();
         assert_file(
@@ -912,7 +903,8 @@ mod tests {
 00000050put-object ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626
 000csize=32
 00010024This is\x00a complicated\xc2\xa9message.
-00000056verify-object ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626 32
+00000053verify-object ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626
+000csize=32
 0000";
         let result = run(&fixtures, "upload", message).unwrap();
         let expected: &[u8] = b"000eversion=1
@@ -965,8 +957,10 @@ mod tests {
 0001000aabc12300000050put-object ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626
 000csize=32
 00010024This is\x01a complicated\xc2\xa9message.
-00000055verify-object 6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6
-00000056verify-object ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626 32
+00000053verify-object 6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090
+000bsize=6
+00000053verify-object ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626
+000csize=32
 0000";
         let result = run(&fixtures, "upload", message).unwrap();
         // This file was correct.
