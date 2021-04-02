@@ -228,18 +228,18 @@ mod tests {
         checkout_branch(&fixtures, "fixup");
         checkout_branch(&fixtures, rev);
         checkout_branch(&fixtures, "branch");
-        checkout_branch(&fixtures, "master");
+        checkout_branch(&fixtures, "dev");
 
         assert_eq!(
             run(&fixtures, SortKind::Visited)
                 .unwrap()
                 .collect::<Vec<_>>(),
             vec![
-                "refs/heads/master",
+                "refs/heads/dev",
                 "refs/heads/branch",
                 rev,
                 "refs/heads/fixup",
-                "refs/heads/master"
+                "refs/heads/dev"
             ],
         );
     }
@@ -256,7 +256,7 @@ mod tests {
                 "refs/heads/merge3",
                 "refs/heads/merge2",
                 "refs/heads/merge1",
-                "refs/heads/master",
+                "refs/heads/dev",
                 "refs/heads/fixup",
                 "refs/heads/branch"
             ],

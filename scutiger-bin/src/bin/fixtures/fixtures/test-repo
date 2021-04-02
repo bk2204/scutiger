@@ -16,7 +16,7 @@ mark :3
 data 4
 foo
 
-commit refs/heads/master
+commit refs/heads/dev
 mark :4
 author Test User <test@example.com> 1551552749 +0000
 committer Test User <test@example.com> 1551552749 +0000
@@ -54,7 +54,7 @@ To ensure maximum barness, update bar to contain content.
 from :5
 M 100644 :6 bar
 
-commit refs/heads/master
+commit refs/heads/dev
 mark :8
 author Test User <test@example.com> 1551552935 +0000
 committer Test User <test@example.com> 1551552935 +0000
@@ -110,7 +110,7 @@ initial commit that introduced it, when it was a new file.
 from :11
 M 100644 :12 baz
 
-commit refs/heads/master
+commit refs/heads/dev
 mark :14
 author Test User <test@example.com> 1552250865 +0000
 committer Test User <test@example.com> 1552250865 +0000

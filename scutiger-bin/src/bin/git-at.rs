@@ -263,11 +263,11 @@ mod tests {
         let fixtures = TestRepository::new();
 
         assert_eq!(
-            run(&fixtures, false, Some("master~1"), "maximum fooness").unwrap(),
+            run(&fixtures, false, Some("dev~1"), "maximum fooness").unwrap(),
             oid("cade2f7cc336453e30007fe76a57732f5e635cd0")
         );
         assert_eq!(
-            run(&fixtures, false, Some("master~1~1"), "maximum barness").unwrap_err(),
+            run(&fixtures, false, Some("dev~1~1"), "maximum barness").unwrap_err(),
             error(ErrorKind::NoSuchRevision)
         );
         assert_eq!(

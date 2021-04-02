@@ -1,4 +1,4 @@
-use git2::Repository;
+use git2::{Repository, RepositoryInitOptions};
 use std::fs::File;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -16,7 +16,9 @@ impl TestRepository {
     /// Create a new test repository. If the repository cannot be created, panic.
     pub fn new() -> TestRepository {
         let dir = tempfile::tempdir().unwrap();
-        let repo = Repository::init(dir.path()).unwrap();
+        let mut opts = RepositoryInitOptions::new();
+        opts.initial_head("refs/heads/dev");
+        let repo = Repository::init_opts(dir.path(), &opts).unwrap();
 
         let mut fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         fixtures.push(FIXTURE_PATH);
