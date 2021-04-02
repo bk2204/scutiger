@@ -1,0 +1,27 @@
+= git-lfs-transfer(1)
+
+== Name
+
+git-lfs-transfer - Provide an SSH-based Git LFS server
+
+== Synopsis
+
+'git-lfs-transfer' <path> <operation>
+
+== Description
+
+Implements a pure SSH Git LFS server, according to the specification in the
+repository for the reference client.
+
+The path is to an existing Git repository, which should be bare, although this
+is not required.  Data is stored in the `lfs` directory within the Git
+directory, just as if the files were downloaded by the reference client into the
+repository.  For this reason, one should not invoke 'git lfs prune' on the
+repository, since this may cause data loss.
+
+The operation is either 'upload' or 'download'.  This restricts access to the
+operations which can be performed, which may be useful in conjunction with a
+restricted shell or the 'command' option in `~/.ssh/authorized_keys`.
+
+No access control is performed; this is done by the SSH daemon and the operating
+system kernel.
