@@ -25,6 +25,7 @@ use scutiger_core::errors::{Error, ErrorKind, ExitStatus};
 use scutiger_core::pktline;
 use sha2::Sha256;
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -32,6 +33,7 @@ use std::io::Write;
 use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 use std::process;
+use std::str::FromStr;
 use tempfile::Builder;
 
 struct PktLineHandler<R: io::Read, W: io::Write> {
@@ -110,6 +112,56 @@ impl<R: io::Read, W: io::Write> PktLineHandler<R, W> {
         }
         self.flush()?;
         Ok(())
+    }
+}
+
+struct ArgumentParser {}
+
+impl ArgumentParser {
+    fn parse(args: &[Bytes]) -> Result<BTreeMap<Bytes, Bytes>, Error> {
+        let mut map = BTreeMap::new();
+        for item in args {
+            let equals = match item.iter().position(|&x| x == b'=') {
+                Some(x) => x,
+                None => {
+                    return Err(Error::from_message(
+                        ErrorKind::ParseError,
+                        "unexpected value parsing argument (missing equals)",
+                    ));
+                }
+            };
+            if item[item.len() - 1] != b'\n' {
+                return Err(Error::from_message(
+                    ErrorKind::ParseError,
+                    "unexpected value parsing argument (missing newline)",
+                ));
+            }
+            if map
+                .insert(
+                    item[0..equals].into(),
+                    item[equals + 1..item.len() - 1].into(),
+                )
+                .is_some()
+            {
+                return Err(Error::from_message(
+                    ErrorKind::ExtraData,
+                    "unexpected duplicate key",
+                ));
+            };
+        }
+        Ok(map)
+    }
+
+    fn parse_integer<F: FromStr>(item: &Bytes) -> Result<F, Error> {
+        // This works because if the thing is not valid UTF-8, we'll get a replacement character,
+        // which is not a valid digit, and so our parsing will fail.
+        match String::from_utf8_lossy(item).parse() {
+            Ok(x) => Ok(x),
+            Err(_) => Err(Error::from_message(
+                ErrorKind::InvalidInteger,
+                format!("unexpected value parsing integer: {:?}", item),
+            )),
+        }
     }
 }
 
@@ -367,32 +419,15 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
     }
 
     fn size_from_arguments(args: &[Bytes]) -> Result<u64, Error> {
-        let prefix: &[u8] = b"size=";
-        for item in args {
-            if !item.starts_with(prefix) {
-                continue;
-            }
-            if item[item.len() - 1] != b'\n' {
-                return Err(Error::from_message(
-                    ErrorKind::ParseError,
-                    "unexpected value parsing size header",
-                ));
-            }
-            let ssize = &item[prefix.len()..item.len() - 1];
-            match String::from_utf8_lossy(ssize).parse() {
-                Ok(x) => return Ok(x),
-                Err(_) => {
-                    return Err(Error::from_message(
-                        ErrorKind::InvalidInteger,
-                        format!("unexpected value parsing size header: {:?}", item),
-                    ))
-                }
-            }
-        }
-        Err(Error::from_message(
-            ErrorKind::MissingData,
-            "missing required size header",
-        ))
+        let args = ArgumentParser::parse(args)?;
+        let size = match args.get(b"size" as &[u8]) {
+            Some(x) => x,
+            None => return Err(Error::from_message(
+                ErrorKind::MissingData,
+                "missing required size header",
+            )),
+        };
+        ArgumentParser::parse_integer(&size)
     }
 
     fn put_object(&mut self, oid: &[u8]) -> Result<Status, Error> {
