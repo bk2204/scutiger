@@ -1252,7 +1252,7 @@ fn program<'a>(r: &'a Repository, matches: &'a ArgMatches) -> Program<'a> {
 }
 
 fn repo<P: AsRef<Path>>(path: P) -> Repository {
-    let repo = git2::Repository::discover(path);
+    let repo = git2::Repository::open(path);
     match repo {
         Ok(r) => r,
         Err(e) => {
