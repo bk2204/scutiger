@@ -1,6 +1,6 @@
 [package]
 name = "scutiger-lfs"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["brian m. carlson <sandals@crustytoothpaste.net>"]
 description = "a set of Git LFS-related utilities"
 repository = "https://github.com/bk2204/scutiger"
@@ -22,7 +22,7 @@ hex = "0.4"
 git2 = { version = "0.13", default-features = false }
 pkg-config = "^0.3"
 libc = "^0.2"
-scutiger-core = { path = "../scutiger-core", version = "0.0.1", features = [] }
+scutiger-core = { path = "../scutiger-core", version = "0.1.0", features = [] }
 sha2 = "0.9"
 tempfile = "3"
 chrono = "^0.4"

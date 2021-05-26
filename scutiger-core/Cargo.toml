@@ -1,6 +1,6 @@
 [package]
 name = "scutiger-core"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["brian m. carlson <sandals@crustytoothpaste.net>"]
 description = "a set of shared functionality for the other Scutiger crates"
 repository = "https://github.com/bk2204/scutiger"
