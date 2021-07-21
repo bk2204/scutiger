@@ -409,7 +409,7 @@ dependencies = [
 
 [[package]]
 name = "scutiger-bin"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "clap",
  "git2",
@@ -422,7 +422,7 @@ dependencies = [
 
 [[package]]
 name = "scutiger-core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "git2",
  "pcre2",
@@ -432,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "scutiger-lfs"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "bytes",
  "chrono",
