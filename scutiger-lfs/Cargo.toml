@@ -14,6 +14,14 @@ include = [
     "LICENSE",
 ]
 
+[lib]
+name = "scutiger_lfs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "git-lfs-transfer"
+path = "src/bin/git-lfs-transfer.rs"
+
 [dependencies]
 bytes = "0.4"
 clap = "^2.32"
