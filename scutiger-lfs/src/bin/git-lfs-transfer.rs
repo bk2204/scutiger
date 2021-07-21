@@ -12,6 +12,7 @@ extern crate git2;
 extern crate hex;
 extern crate libc;
 extern crate scutiger_core;
+extern crate scutiger_lfs;
 extern crate sha2;
 extern crate tempfile;
 
@@ -25,7 +26,7 @@ use clap::{App, Arg, ArgMatches};
 use digest::Digest;
 use git2::Repository;
 use scutiger_core::errors::{Error, ErrorKind, ExitStatus};
-use scutiger_core::pktline;
+use scutiger_lfs::processor::{PktLineHandler, Status};
 use sha2::Sha256;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -33,91 +34,11 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::io::{Read, Write};
-use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::str::FromStr;
 use std::time::SystemTime;
 use tempfile::Builder;
-
-struct PktLineHandler<R: io::Read, W: io::Write> {
-    rdr: pktline::Reader<R>,
-    wrtr: pktline::Writer<W>,
-}
-
-impl<R: io::Read, W: io::Write> PktLineHandler<R, W> {
-    fn new(rdr: R, wrtr: W) -> Self {
-        PktLineHandler {
-            rdr: pktline::Reader::new(rdr),
-            wrtr: pktline::Writer::new(wrtr),
-        }
-    }
-
-    fn read_to_type(&mut self, typ: pktline::PacketType) -> Result<Vec<Bytes>, Error> {
-        self.rdr
-            .iter()
-            .take_while(|pkt| match pkt {
-                Ok(pkt) if pkt.packet_type() == typ => false,
-                _ => true,
-            })
-            .map(|pkt| pkt.map(|p| p.data().unwrap_or(b"").into()))
-            .collect()
-    }
-
-    fn read_to_delim(&mut self) -> Result<Vec<Bytes>, Error> {
-        self.read_to_type(pktline::PacketType::Delim)
-    }
-
-    fn read_to_flush(&mut self) -> Result<Vec<Bytes>, Error> {
-        self.read_to_type(pktline::PacketType::Flush)
-    }
-
-    fn send(&mut self, msg: &[u8]) -> Result<(), Error> {
-        self.wrtr.write_all(msg)?;
-        Ok(())
-    }
-
-    fn flush(&mut self) -> Result<(), Error> {
-        let pkt = pktline::Packet::new(pktline::PacketType::Flush, b"");
-        self.wrtr.write_packet(&pkt)?;
-        Ok(())
-    }
-
-    fn delim(&mut self) -> Result<(), Error> {
-        let pkt = pktline::Packet::new(pktline::PacketType::Delim, b"");
-        self.wrtr.write_packet(&pkt)?;
-        Ok(())
-    }
-
-    fn send_error(&mut self, status: u32, msg: &str) -> Result<(), Error> {
-        self.send(format!("status {:03}\n", status).as_bytes())?;
-        self.delim()?;
-        self.send(msg.as_bytes())?;
-        self.flush()?;
-        Ok(())
-    }
-
-    fn send_status(&mut self, status: Status) -> Result<(), Error> {
-        let mut status = status;
-        self.send(format!("status {:03}\n", status.code).as_bytes())?;
-        if let Some(ref args) = status.args {
-            for arg in args.iter() {
-                self.send(arg)?;
-            }
-        }
-        if let Some(ref messages) = status.messages {
-            self.delim()?;
-            for msg in messages.iter() {
-                self.send(msg)?;
-            }
-        } else if let Some(ref mut reader) = status.reader {
-            self.delim()?;
-            io::copy(reader, &mut self.wrtr)?;
-        }
-        self.flush()?;
-        Ok(())
-    }
-}
 
 struct ArgumentParser {}
 
@@ -196,84 +117,6 @@ impl<'a, R: io::Read, H: digest::Digest + io::Write> io::Read for HashingReader<
         self.hash.write_all(&buf[0..count])?;
         self.size += count as u64;
         Ok(count)
-    }
-}
-
-struct Status {
-    code: u32,
-    args: Option<Vec<Bytes>>,
-    messages: Option<Vec<Bytes>>,
-    reader: Option<Box<io::Read>>,
-}
-
-impl Status {
-    fn success() -> Status {
-        Status {
-            code: 200,
-            args: None,
-            messages: None,
-            reader: None,
-        }
-    }
-
-    fn new_success(messages: Vec<Bytes>) -> Status {
-        Status {
-            code: 200,
-            args: None,
-            messages: Some(messages),
-            reader: None,
-        }
-    }
-
-    fn new_success_with_code(code: u32, args: Vec<Bytes>) -> Status {
-        Status {
-            code,
-            args: Some(args),
-            messages: None,
-            reader: None,
-        }
-    }
-
-    fn new_success_with_data(code: u32, args: Vec<Bytes>, messages: Vec<Bytes>) -> Status {
-        Status {
-            code,
-            args: Some(args),
-            messages: Some(messages),
-            reader: None,
-        }
-    }
-
-    fn new_reader(args: Vec<Bytes>, reader: Box<io::Read>) -> Status {
-        Status {
-            code: 200,
-            args: Some(args),
-            messages: None,
-            reader: Some(reader),
-        }
-    }
-
-    fn new_failure(code: u32, message: &[u8]) -> Status {
-        Status {
-            code,
-            args: None,
-            messages: Some(vec![message.into()]),
-            reader: None,
-        }
-    }
-
-    fn new_failure_with_args(code: u32, args: Vec<Bytes>, message: &[u8]) -> Status {
-        Status {
-            code,
-            args: Some(args),
-            messages: Some(vec![message.into()]),
-            reader: None,
-        }
-    }
-}
-
-impl FromIterator<Bytes> for Status {
-    fn from_iter<I: IntoIterator<Item = Bytes>>(iter: I) -> Self {
-        Self::new_success(iter.into_iter().collect())
     }
 }
 
