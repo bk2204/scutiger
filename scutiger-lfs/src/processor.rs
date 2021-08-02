@@ -172,7 +172,7 @@ pub enum Mode {
     Download,
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
 pub struct Oid {
     // We hold this value as a string because bytes cannot be converted into paths on Windows.
     oid: String,
@@ -220,6 +220,12 @@ impl Oid {
     /// path, which should be a `.git/lfs` directory.
     pub fn exists_at_path(&self, path: &Path) -> bool {
         self.expected_path(path).is_file()
+    }
+
+    /// Returns `Some(size)`, where `size` is the size of the file if the object with this ID
+    /// exists a the given path, which should be a `.git/lfs` directory, or `None` otherwise.
+    pub fn size_at_path(&self, path: &Path) -> Option<u64> {
+        self.expected_path(path).metadata().ok().map(|x| x.len())
     }
 }
 
