@@ -26,6 +26,8 @@ use clap::{App, Arg, ArgMatches};
 use digest::Digest;
 use git2::Repository;
 use scutiger_core::errors::{Error, ErrorKind, ExitStatus};
+use scutiger_lfs::backend::local::LocalBackend;
+use scutiger_lfs::backend::Backend;
 use scutiger_lfs::processor::{BatchItem, Mode, Oid, PktLineHandler, Status};
 use sha2::Sha256;
 use std::cmp::Ordering;
@@ -445,6 +447,7 @@ struct Processor<'a, R: io::Read, W: io::Write> {
     lfs_path: &'a Path,
     umask: u32,
     timestamp: Option<i64>,
+    backend: Box<dyn Backend + 'a>,
 }
 
 impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
@@ -459,6 +462,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
             lfs_path,
             umask,
             timestamp,
+            backend: Box::new(LocalBackend::new(lfs_path, umask, timestamp)),
         }
     }
 
@@ -477,7 +481,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
         Ok(Status::new_failure(code, msg.as_bytes()))
     }
 
-    fn read_batch(&mut self) -> Result<Vec<BatchItem>, Error> {
+    fn read_batch(&mut self, mode: Mode) -> Result<Vec<BatchItem>, Error> {
         if let Err(e) = self.handler.read_to_delim() {
             return Err(Error::new(ErrorKind::ParseError, Some(e)));
         }
@@ -485,7 +489,8 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
             Ok(v) => v,
             Err(e) => return Err(Error::new(ErrorKind::ParseError, Some(e))),
         };
-        data.iter()
+        let oids = data
+            .iter()
             .map(|line| {
                 if line.is_empty() || line[line.len() - 1] != b'\n' {
                     return Err(Error::new_simple(ErrorKind::InvalidPacket));
@@ -507,15 +512,19 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
                         ))
                     }
                 };
-                let oid = Oid::new(&pair[0])?;
-                let present = oid.exists_at_path(self.lfs_path);
-                Ok(BatchItem { oid, size, present })
+                Ok((Oid::new(&pair[0])?, size))
             })
-            .collect::<Result<Vec<_>, Error>>()
+            .collect::<Result<Vec<_>, Error>>();
+        self.backend.batch(mode, &oids?)
     }
 
-    fn batch_data(&mut self, present_action: &str, missing_action: &str) -> Result<Status, Error> {
-        let batch = self.read_batch()?;
+    fn batch_data(
+        &mut self,
+        mode: Mode,
+        present_action: &str,
+        missing_action: &str,
+    ) -> Result<Status, Error> {
+        let batch = self.read_batch(mode)?;
         Ok(batch
             .iter()
             .map(|item| {
@@ -540,11 +549,11 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
     }
 
     fn upload_batch(&mut self) -> Result<Status, Error> {
-        self.batch_data("noop", "upload")
+        self.batch_data(Mode::Upload, "noop", "upload")
     }
 
     fn download_batch(&mut self) -> Result<Status, Error> {
-        self.batch_data("download", "noop")
+        self.batch_data(Mode::Download, "download", "noop")
     }
 
     #[cfg(unix)]
