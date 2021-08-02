@@ -26,11 +26,10 @@ use clap::{App, Arg, ArgMatches};
 use digest::Digest;
 use git2::Repository;
 use scutiger_core::errors::{Error, ErrorKind, ExitStatus};
-use scutiger_lfs::processor::{PktLineHandler, Status};
+use scutiger_lfs::processor::{BatchItem, Mode, Oid, PktLineHandler, Status};
 use sha2::Sha256;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
-use std::fmt;
 use std::fs;
 use std::io;
 use std::io::{Read, Write};
@@ -439,69 +438,6 @@ impl LockSet {
     fn iter(&self) -> LockSetIterator {
         LockSetIterator::new(&self.path)
     }
-}
-
-#[derive(Eq, PartialEq, Ord, PartialOrd)]
-struct Oid {
-    // We hold this value as a string because bytes cannot be converted into paths on Windows.
-    oid: String,
-}
-
-impl Oid {
-    fn new(oid: &[u8]) -> Result<Self, Error> {
-        if Self::valid(&oid) {
-            // Note that because we've validated that this string contains only lowercase hex
-            // characters, this will always be a complete, non-lossy transformation.
-            Ok(Oid {
-                oid: String::from_utf8_lossy(oid).into(),
-            })
-        } else {
-            Err(Error::new_simple(ErrorKind::InvalidLFSOid))
-        }
-    }
-
-    fn as_str(&self) -> &str {
-        &self.oid
-    }
-
-    fn value(&self) -> &[u8] {
-        self.oid.as_bytes()
-    }
-
-    fn valid(b: &[u8]) -> bool {
-        b.len() == 64
-            && b.iter()
-                .all(|&x| (b'0'..=b'9').contains(&x) || (b'a'..=b'f').contains(&x))
-    }
-
-    /// Returns the expected path for this object given the `path` argument, which should be a
-    /// `.git/lfs` directory.
-    fn expected_path(&self, path: &Path) -> PathBuf {
-        let mut buf = path.to_path_buf();
-        buf.push("objects");
-        buf.push(&self.oid[0..2]);
-        buf.push(&self.oid[2..4]);
-        buf.push(&self.oid);
-        buf
-    }
-
-    /// Returns a boolean indicating whether an object with this ID is present under the given
-    /// path, which should be a `.git/lfs` directory.
-    fn exists_at_path(&self, path: &Path) -> bool {
-        self.expected_path(path).is_file()
-    }
-}
-
-impl fmt::Display for Oid {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.oid)
-    }
-}
-
-struct BatchItem {
-    oid: Oid,
-    size: u64,
-    present: bool,
 }
 
 struct Processor<'a, R: io::Read, W: io::Write> {
@@ -948,12 +884,6 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
             }?;
         }
     }
-}
-
-#[derive(Clone, Copy)]
-enum Mode {
-    Upload,
-    Download,
 }
 
 /// The main program.

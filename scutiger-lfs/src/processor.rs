@@ -1,11 +1,13 @@
 #![allow(clippy::match_like_matches_macro)]
 
 use bytes::Bytes;
-use scutiger_core::errors::Error;
+use scutiger_core::errors::{Error, ErrorKind};
 use scutiger_core::pktline;
+use std::fmt;
 use std::io;
 use std::io::Write;
 use std::iter::FromIterator;
+use std::path::{Path, PathBuf};
 
 pub struct Status {
     code: u32,
@@ -162,4 +164,73 @@ impl<R: io::Read, W: io::Write> PktLineHandler<R, W> {
         self.flush()?;
         Ok(())
     }
+}
+
+#[derive(Clone, Copy)]
+pub enum Mode {
+    Upload,
+    Download,
+}
+
+#[derive(Eq, PartialEq, Ord, PartialOrd)]
+pub struct Oid {
+    // We hold this value as a string because bytes cannot be converted into paths on Windows.
+    oid: String,
+}
+
+impl Oid {
+    pub fn new(oid: &[u8]) -> Result<Self, Error> {
+        if Self::valid(&oid) {
+            // Note that because we've validated that this string contains only lowercase hex
+            // characters, this will always be a complete, non-lossy transformation.
+            Ok(Oid {
+                oid: String::from_utf8_lossy(oid).into(),
+            })
+        } else {
+            Err(Error::new_simple(ErrorKind::InvalidLFSOid))
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.oid
+    }
+
+    pub fn value(&self) -> &[u8] {
+        self.oid.as_bytes()
+    }
+
+    pub fn valid(b: &[u8]) -> bool {
+        b.len() == 64
+            && b.iter()
+                .all(|&x| (b'0'..=b'9').contains(&x) || (b'a'..=b'f').contains(&x))
+    }
+
+    /// Returns the expected path for this object given the `path` argument, which should be a
+    /// `.git/lfs` directory.
+    pub fn expected_path(&self, path: &Path) -> PathBuf {
+        let mut buf = path.to_path_buf();
+        buf.push("objects");
+        buf.push(&self.oid[0..2]);
+        buf.push(&self.oid[2..4]);
+        buf.push(&self.oid);
+        buf
+    }
+
+    /// Returns a boolean indicating whether an object with this ID is present under the given
+    /// path, which should be a `.git/lfs` directory.
+    pub fn exists_at_path(&self, path: &Path) -> bool {
+        self.expected_path(path).is_file()
+    }
+}
+
+impl fmt::Display for Oid {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.oid)
+    }
+}
+
+pub struct BatchItem {
+    pub oid: Oid,
+    pub size: u64,
+    pub present: bool,
 }
