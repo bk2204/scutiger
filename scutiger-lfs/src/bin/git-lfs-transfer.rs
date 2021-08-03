@@ -28,7 +28,7 @@ use git2::Repository;
 use scutiger_core::errors::{Error, ErrorKind, ExitStatus};
 use scutiger_lfs::backend::local::LocalBackend;
 use scutiger_lfs::backend::Backend;
-use scutiger_lfs::processor::{BatchItem, Mode, Oid, PktLineHandler, Status};
+use scutiger_lfs::processor::{ArgumentParser, BatchItem, Mode, Oid, PktLineHandler, Status};
 use sha2::Sha256;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -37,59 +37,8 @@ use std::io;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process;
-use std::str::FromStr;
 use std::time::SystemTime;
 use tempfile::Builder;
-
-struct ArgumentParser {}
-
-impl ArgumentParser {
-    fn parse(args: &[Bytes]) -> Result<BTreeMap<Bytes, Bytes>, Error> {
-        let mut map = BTreeMap::new();
-        for item in args {
-            let equals = match item.iter().position(|&x| x == b'=') {
-                Some(x) => x,
-                None => {
-                    return Err(Error::from_message(
-                        ErrorKind::ParseError,
-                        "unexpected value parsing argument (missing equals)",
-                    ));
-                }
-            };
-            if item[item.len() - 1] != b'\n' {
-                return Err(Error::from_message(
-                    ErrorKind::ParseError,
-                    "unexpected value parsing argument (missing newline)",
-                ));
-            }
-            if map
-                .insert(
-                    item[0..equals].into(),
-                    item[equals + 1..item.len() - 1].into(),
-                )
-                .is_some()
-            {
-                return Err(Error::from_message(
-                    ErrorKind::ExtraData,
-                    "unexpected duplicate key",
-                ));
-            };
-        }
-        Ok(map)
-    }
-
-    fn parse_integer<F: FromStr>(item: &Bytes) -> Result<F, Error> {
-        // This works because if the thing is not valid UTF-8, we'll get a replacement character,
-        // which is not a valid digit, and so our parsing will fail.
-        match String::from_utf8_lossy(item).parse() {
-            Ok(x) => Ok(x),
-            Err(_) => Err(Error::from_message(
-                ErrorKind::InvalidInteger,
-                format!("unexpected value parsing integer: {:?}", item),
-            )),
-        }
-    }
-}
 
 struct HashingReader<'a, R: io::Read, H: digest::Digest + io::Write> {
     rdr: &'a mut R,
