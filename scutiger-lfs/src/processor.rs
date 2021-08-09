@@ -292,3 +292,33 @@ impl ArgumentParser {
         }
     }
 }
+
+pub struct HashingReader<'a, R: io::Read, H: digest::Digest + io::Write> {
+    rdr: &'a mut R,
+    hash: H,
+    size: u64,
+}
+
+impl<'a, R: io::Read, H: digest::Digest + io::Write> HashingReader<'a, R, H> {
+    pub fn new(rdr: &'a mut R, hash: H) -> Self {
+        HashingReader { rdr, hash, size: 0 }
+    }
+
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
+    pub fn oid(self) -> Result<Oid, Error> {
+        let hex = hex::encode(self.hash.finalize());
+        Oid::new(hex.as_bytes())
+    }
+}
+
+impl<'a, R: io::Read, H: digest::Digest + io::Write> io::Read for HashingReader<'a, R, H> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let count = self.rdr.read(buf)?;
+        self.hash.write_all(&buf[0..count])?;
+        self.size += count as u64;
+        Ok(count)
+    }
+}
