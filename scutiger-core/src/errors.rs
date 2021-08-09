@@ -38,6 +38,7 @@ pub enum ErrorKind {
     CorruptData,
     NotAllowed,
     InvalidPath,
+    DowncastError,
 }
 
 #[derive(Debug)]
@@ -78,6 +79,7 @@ impl fmt::Display for Error {
             ErrorKind::CorruptData => write!(f, "corrupt data"),
             ErrorKind::NotAllowed => write!(f, "not allowed"),
             ErrorKind::InvalidPath => write!(f, "invalid path"),
+            ErrorKind::DowncastError => write!(f, "unexpected type when downcasting"),
         }?;
         if let Some(ref msg) = self.message {
             write!(f, ": {}", msg)?;
