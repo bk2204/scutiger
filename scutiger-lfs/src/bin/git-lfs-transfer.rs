@@ -28,7 +28,7 @@ use git2::Repository;
 use scutiger_core::errors::{Error, ErrorKind, ExitStatus};
 use scutiger_lfs::backend::local::LocalBackend;
 use scutiger_lfs::backend::Backend;
-use scutiger_lfs::processor::{ArgumentParser, BatchItem, Mode, Oid, PktLineHandler, Status};
+use scutiger_lfs::processor::{ArgumentParser, BatchItem, HashingReader, Mode, Oid, PktLineHandler, Status};
 use sha2::Sha256;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -39,36 +39,6 @@ use std::path::{Path, PathBuf};
 use std::process;
 use std::time::SystemTime;
 use tempfile::Builder;
-
-struct HashingReader<'a, R: io::Read, H: digest::Digest + io::Write> {
-    rdr: &'a mut R,
-    hash: H,
-    size: u64,
-}
-
-impl<'a, R: io::Read, H: digest::Digest + io::Write> HashingReader<'a, R, H> {
-    fn new(rdr: &'a mut R, hash: H) -> Self {
-        HashingReader { rdr, hash, size: 0 }
-    }
-
-    fn size(&self) -> u64 {
-        self.size
-    }
-
-    fn oid(self) -> Result<Oid, Error> {
-        let hex = hex::encode(self.hash.finalize());
-        Oid::new(hex.as_bytes())
-    }
-}
-
-impl<'a, R: io::Read, H: digest::Digest + io::Write> io::Read for HashingReader<'a, R, H> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let count = self.rdr.read(buf)?;
-        self.hash.write_all(&buf[0..count])?;
-        self.size += count as u64;
-        Ok(count)
-    }
-}
 
 struct LockFile {
     path: PathBuf,
