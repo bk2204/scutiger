@@ -28,7 +28,9 @@ use git2::Repository;
 use scutiger_core::errors::{Error, ErrorKind, ExitStatus};
 use scutiger_lfs::backend::local::LocalBackend;
 use scutiger_lfs::backend::Backend;
-use scutiger_lfs::processor::{ArgumentParser, BatchItem, HashingReader, Mode, Oid, PktLineHandler, Status};
+use scutiger_lfs::processor::{
+    ArgumentParser, BatchItem, HashingReader, Mode, Oid, PktLineHandler, Status,
+};
 use sha2::Sha256;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -475,23 +477,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
         self.batch_data(Mode::Download, "download", "noop")
     }
 
-    #[cfg(unix)]
-    fn fix_permissions(&self, path: &Path) -> Result<Status, Error> {
-        use std::os::unix::fs::PermissionsExt;
-
-        let mut perms = fs::metadata(path)?.permissions();
-        perms.set_mode(0o777 & !self.umask);
-        fs::set_permissions(path, perms)?;
-        Ok(Status::success())
-    }
-
-    #[cfg(not(unix))]
-    fn fix_permissions(&self, path: &Path) -> Result<Status, Error> {
-        Ok(Status::success())
-    }
-
-    fn size_from_arguments(args: &[Bytes]) -> Result<u64, Error> {
-        let args = ArgumentParser::parse(args)?;
+    fn size_from_arguments(args: &BTreeMap<Bytes, Bytes>) -> Result<u64, Error> {
         let size = match args.get(b"size" as &[u8]) {
             Some(x) => x,
             None => {
@@ -506,18 +492,10 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
 
     fn put_object(&mut self, oid: &[u8]) -> Result<Status, Error> {
         let oid = Oid::new(oid)?;
-        let mut tempdir: PathBuf = self.lfs_path.into();
-        tempdir.push("incomplete");
-        let mut tempfile = Builder::new()
-            .prefix(oid.as_str())
-            .rand_bytes(12)
-            .tempfile_in(&tempdir)?;
-        let expected_size = match self.handler.read_to_delim() {
-            Ok(vec) => Self::size_from_arguments(&vec)?,
-            Err(e) => return Err(Error::new(ErrorKind::ParseError, Some(e))),
-        };
+        let args = ArgumentParser::parse(&self.handler.read_to_delim()?)?;
+        let expected_size = Self::size_from_arguments(&args)?;
         let mut rdr = HashingReader::new(&mut self.handler.rdr, Sha256::new());
-        io::copy(&mut rdr, tempfile.as_file_mut())?;
+        let state = self.backend.start_upload(&oid, &mut rdr, &args)?;
         let actual_size = rdr.size();
         match actual_size.cmp(&expected_size) {
             Ordering::Less => {
@@ -545,26 +523,13 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
                 format!("expected oid {}, got {}", oid, actual_oid),
             ));
         }
-
-        // This is a valid file.  Let's create any missing directories and then rename it.  This
-        // uses an atomic rename, which should work
-        // on all platforms.
-        let dest_path = oid.expected_path(self.lfs_path);
-        if let Some(parent) = dest_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        tempfile
-            .into_temp_path()
-            .persist(&dest_path)
-            .map_err(|e| Error::new(ErrorKind::IOError, Some(e)))?;
-        self.fix_permissions(&dest_path)
+        self.backend.finish_upload(state)?;
+        Ok(Status::success())
     }
 
     fn verify_object(&mut self, oid: &[u8]) -> Result<Status, Error> {
-        let expected_size = match self.handler.read_to_flush() {
-            Ok(vec) => Self::size_from_arguments(&vec)?,
-            Err(e) => return Err(Error::new(ErrorKind::ParseError, Some(e))),
-        };
+        let args = ArgumentParser::parse(&self.handler.read_to_flush()?)?;
+        let expected_size = Self::size_from_arguments(&args)?;
         let oid = Oid::new(oid)?;
         let path = oid.expected_path(self.lfs_path);
         let metadata = match fs::metadata(path) {
