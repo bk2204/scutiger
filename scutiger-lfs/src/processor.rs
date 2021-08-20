@@ -280,6 +280,19 @@ impl ArgumentParser {
         Ok(map)
     }
 
+    pub fn parse_value_as_integer<F: FromStr>(
+        args: &BTreeMap<Bytes, Bytes>,
+        key: &[u8],
+    ) -> Result<F, Error> {
+        match args.get(key) {
+            Some(x) => Self::parse_integer(x),
+            None => Err(Error::from_message(
+                ErrorKind::MissingData,
+                "missing required header",
+            )),
+        }
+    }
+
     pub fn parse_integer<F: FromStr>(item: &Bytes) -> Result<F, Error> {
         // This works because if the thing is not valid UTF-8, we'll get a replacement character,
         // which is not a valid digit, and so our parsing will fail.
