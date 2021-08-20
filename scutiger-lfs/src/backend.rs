@@ -1,4 +1,4 @@
-use super::processor::{BatchItem, Mode, Oid};
+use super::processor::{BatchItem, Status, Mode, Oid};
 use bytes::Bytes;
 use scutiger_core::errors::Error;
 use std::any::Any;
@@ -16,4 +16,6 @@ pub trait Backend {
         args: &BTreeMap<Bytes, Bytes>,
     ) -> Result<Box<dyn Any>, Error>;
     fn finish_upload(&mut self, state: Box<dyn Any>) -> Result<(), Error>;
+    fn verify(&mut self, oid: &Oid, args: &BTreeMap<Bytes, Bytes>) -> Result<Status, Error>;
+    fn download(&mut self, oid: &Oid, args: &BTreeMap<Bytes, Bytes>) -> Result<(Box<dyn io::Read>, Option<u64>), Error>;
 }

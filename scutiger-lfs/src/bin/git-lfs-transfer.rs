@@ -529,42 +529,25 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
 
     fn verify_object(&mut self, oid: &[u8]) -> Result<Status, Error> {
         let args = ArgumentParser::parse(&self.handler.read_to_flush()?)?;
-        let expected_size = Self::size_from_arguments(&args)?;
         let oid = Oid::new(oid)?;
-        let path = oid.expected_path(&self.lfs_path);
-        let metadata = match fs::metadata(path) {
-            Ok(m) => m,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return self.error(404, "not found"),
-            Err(e) => return Err(e.into()),
-        };
-        let actual_size = metadata.len();
-        if actual_size == expected_size {
-            Ok(Status::success())
-        } else {
-            self.error(409, "mismatched size or cryptographic collision")
-        }
+        self.backend.verify(&oid, &args)
     }
 
     fn get_object(&mut self, oid: &[u8]) -> Result<Status, Error> {
+        let args = ArgumentParser::parse(&self.handler.read_to_flush()?)?;
         let oid = Oid::new(oid)?;
-        let path = oid.expected_path(&self.lfs_path);
-        let file = match fs::File::open(path) {
-            Ok(f) => f,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return self.error(404, "not found"),
+        let (rdr, size) = match self.backend.download(&oid, &args) {
+            Ok(x) => x,
+            Err(e) if e.io_kind() == io::ErrorKind::NotFound => {
+                return Ok(Status::new_failure(404, "not found".as_bytes()))
+            }
             Err(e) => return Err(e.into()),
         };
-        let metadata = match file.metadata() {
-            Ok(f) => f,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return self.error(404, "not found"),
-            Err(e) => return Err(e.into()),
+        let args = match size {
+            Some(size) => vec![format!("size={}\n", size).into()],
+            None => vec![],
         };
-        let args = vec![format!("size={}\n", metadata.len()).into()];
-
-        self.handler
-            .read_to_flush()
-            .map_err(|e| Error::new(ErrorKind::ParseError, Some(e)))?;
-
-        Ok(Status::new_reader(args, Box::new(file)))
+        Ok(Status::new_reader(args, rdr))
     }
 
     fn lock(&mut self) -> Result<Status, Error> {

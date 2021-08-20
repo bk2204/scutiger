@@ -1,5 +1,5 @@
 use super::Backend;
-use crate::processor::{BatchItem, Mode, Oid, Status};
+use crate::processor::{ArgumentParser, BatchItem, Mode, Oid, Status};
 use bytes::Bytes;
 use scutiger_core::errors::{Error, ErrorKind};
 use std::any::Any;
@@ -99,5 +99,37 @@ impl<'a> Backend for LocalBackend<'a> {
             .map_err(|e| Error::new(ErrorKind::IOError, Some(e)))?;
         self.fix_permissions(&dest_path)?;
         Ok(())
+    }
+
+    fn verify(&mut self, oid: &Oid, args: &BTreeMap<Bytes, Bytes>) -> Result<Status, Error> {
+        let expected_size: u64 = ArgumentParser::parse_value_as_integer(args, b"size")?;
+        let path = oid.expected_path(self.lfs_path);
+        let metadata = match fs::metadata(path) {
+            Ok(m) => m,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                return Ok(Status::new_failure(404, "not found".as_bytes()))
+            }
+            Err(e) => return Err(e.into()),
+        };
+        let actual_size = metadata.len();
+        if actual_size == expected_size {
+            Ok(Status::success())
+        } else {
+            Ok(Status::new_failure(
+                409,
+                "mismatched size or cryptographic collision".as_bytes(),
+            ))
+        }
+    }
+
+    fn download(
+        &mut self,
+        oid: &Oid,
+        _args: &BTreeMap<Bytes, Bytes>,
+    ) -> Result<(Box<dyn io::Read>, Option<u64>), Error> {
+        let path = oid.expected_path(self.lfs_path);
+        let file = fs::File::open(path)?;
+        let metadata = file.metadata()?;
+        Ok((Box::new(file), Some(metadata.len())))
     }
 }
