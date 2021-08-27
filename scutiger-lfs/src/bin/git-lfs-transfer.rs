@@ -40,9 +40,6 @@ use std::process;
 
 struct Processor<'a, R: io::Read, W: io::Write> {
     handler: PktLineHandler<R, W>,
-    lfs_path: &'a Path,
-    umask: u32,
-    timestamp: Option<i64>,
     backend: Box<dyn Backend + 'a>,
 }
 
