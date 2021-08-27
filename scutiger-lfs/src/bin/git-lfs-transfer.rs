@@ -20,8 +20,7 @@ extern crate tempfile;
 #[macro_use]
 extern crate pretty_assertions;
 
-use bytes::{Bytes, BytesMut};
-use chrono::{TimeZone, Utc};
+use bytes::Bytes;
 use clap::{App, Arg, ArgMatches};
 use digest::Digest;
 use git2::Repository;
@@ -36,332 +35,8 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process;
-use std::time::SystemTime;
-use tempfile::Builder;
-
-struct LockFile {
-    path: PathBuf,
-    temp: PathBuf,
-}
-
-impl LockFile {
-    fn new(path: &Path) -> Result<LockFile, Error> {
-        let mut temp = path.to_owned();
-        temp.set_extension("lock");
-        Ok(LockFile {
-            path: path.to_owned(),
-            temp,
-        })
-    }
-
-    fn write(&self, data: &[u8]) -> Result<(), Error> {
-        let mut f = match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&self.temp)
-        {
-            Ok(f) => f,
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                return Err(Error::new_simple(ErrorKind::Conflict))
-            }
-            Err(e) => return Err(e.into()),
-        };
-        f.write_all(data)?;
-        f.flush()?;
-        drop(f);
-        Ok(())
-    }
-
-    #[allow(unused_must_use)]
-    fn persist(self) -> Result<(), Error> {
-        match fs::hard_link(&self.temp, &self.path) {
-            Ok(()) => Ok(()),
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                Err(Error::new_simple(ErrorKind::Conflict))
-            }
-            Err(e) => Err(e.into()),
-        }
-    }
-}
-
-impl Drop for LockFile {
-    #[allow(unused_must_use)]
-    fn drop(&mut self) {
-        // We don't care if the file removal failed.  We did the best we could.
-        fs::remove_file(&self.temp);
-    }
-}
-
-struct Lock {
-    root: PathBuf,
-    path_name: Bytes,
-    time: i64,
-    ownername: String,
-}
-
-impl Lock {
-    const VERSION: &'static str = "v1";
-
-    fn new(root: PathBuf, path: Bytes, time: i64) -> Result<Lock, Error> {
-        let id = Self::hash_for(&path);
-        let mut b: BytesMut = format!("{}:{}:", Self::VERSION, time).into();
-        b.extend_from_slice(&path);
-        let mut filename = root.clone();
-        filename.push(id);
-        let lock = LockFile::new(&filename)?;
-        lock.write(&b)?;
-        lock.persist()?;
-        let user = Self::user_for_file(&filename).unwrap_or_else(|_| "unknown".into());
-        Ok(Lock {
-            root,
-            path_name: path,
-            time,
-            ownername: user,
-        })
-    }
-
-    fn from_path(root: PathBuf, path: &Bytes) -> Result<Option<Lock>, Error> {
-        let id = Self::hash_for(path);
-        match Self::from_id(root, &id) {
-            Ok(None) => Ok(None),
-            Ok(Some(l)) if l.path() != path => {
-                // This should never happen except with corruption, since otherwise we'd need a
-                // collision of SHA-256.
-                Err(Error::from_message(
-                    ErrorKind::CorruptData,
-                    "unexpected filename in parsed lock",
-                ))
-            }
-            Ok(Some(l)) => Ok(Some(l)),
-            Err(e) => Err(e),
-        }
-    }
-
-    fn from_id(root: PathBuf, path: &str) -> Result<Option<Lock>, Error> {
-        let mut filename = root.clone();
-        filename.push(path);
-        let mut f = match fs::OpenOptions::new().read(true).open(&filename) {
-            Ok(f) => f,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.into()),
-        };
-        let mut v = Vec::new();
-        f.read_to_end(&mut v)?;
-        let user = Self::user_for_file(&filename).unwrap_or_else(|_| "unknown".into());
-        let (time, parsed_path) = match Self::parse(v) {
-            Some(x) => x,
-            None => {
-                return Err(Error::from_message(
-                    ErrorKind::CorruptData,
-                    "invalid parsed lock",
-                ))
-            }
-        };
-        Ok(Some(Lock {
-            root,
-            path_name: parsed_path,
-            time,
-            ownername: user,
-        }))
-    }
-
-    fn unlock(self) -> Result<(), Error> {
-        let id = Self::hash_for(&self.path_name);
-        let mut filename = self.root;
-        filename.push(id);
-        fs::remove_file(&filename)?;
-        Ok(())
-    }
-
-    fn parse(data: Vec<u8>) -> Option<(i64, Bytes)> {
-        let v: Vec<Vec<u8>> = data.splitn(3, |&x| x == b':').map(|x| x.into()).collect();
-        if v.len() != 3 || v[0] != Self::VERSION.as_bytes() {
-            return None;
-        }
-        let s: String = String::from_utf8(v[1].clone()).ok()?;
-        let time = s.parse().ok()?;
-        Some((time, v[2].clone().into()))
-    }
-
-    fn path(&self) -> Bytes {
-        self.path_name.clone()
-    }
-
-    fn id(&self) -> String {
-        Self::hash_for(&self.path_name)
-    }
-
-    fn formatted_timestamp(&self) -> String {
-        Utc.timestamp(self.time, 0).to_rfc3339()
-    }
-
-    fn ownername(&self) -> &str {
-        &self.ownername
-    }
-
-    fn hash_for(path: &Bytes) -> String {
-        let mut hash = Sha256::new();
-        hash.update(Self::VERSION.as_bytes());
-        hash.update(b":");
-        hash.update(&path);
-        hex::encode(hash.finalize())
-    }
-
-    fn as_lock_spec(&self, owner_id: bool) -> Result<Vec<Bytes>, Error> {
-        let id = Self::hash_for(&self.path_name);
-        let mut v = vec![
-            format!("lock {}\n", id).as_bytes().into(),
-            ([b"path ", id.as_bytes(), b" ", &self.path_name, b"\n"])
-                .join(b"" as &[u8])
-                .into(),
-            format!("locked-at {} {}\n", id, self.formatted_timestamp())
-                .as_bytes()
-                .into(),
-            format!("ownername {} {}\n", id, self.ownername())
-                .as_bytes()
-                .into(),
-        ];
-        if owner_id {
-            let user = self.current_user()?;
-            let who = if user == self.ownername() {
-                "ours"
-            } else {
-                "theirs"
-            };
-            v.push(format!("owner {} {}\n", id, who).as_bytes().into());
-        }
-        Ok(v)
-    }
-
-    fn as_arguments(&self) -> Vec<Bytes> {
-        let mut b = BytesMut::new();
-        b.extend_from_slice(b"path=");
-        b.extend_from_slice(&self.path());
-        b.extend_from_slice(b"\n");
-        vec![
-            format!("id={}\n", self.id()).into(),
-            b.into(),
-            format!("locked-at={}\n", self.formatted_timestamp()).into(),
-            format!("ownername={}\n", self.ownername()).into(),
-        ]
-    }
-
-    #[cfg(all(windows, not(test)))]
-    fn user_for_file(path: &Path) -> Result<String, Error> {
-        Ok("unknown".into())
-    }
-
-    #[cfg(all(unix, not(test)))]
-    fn user_for_file(path: &Path) -> Result<String, Error> {
-        use std::os::unix::fs::MetadataExt;
-        let st = fs::metadata(path)?;
-        Ok(format!("uid {}", st.uid()))
-    }
-
-    #[cfg(test)]
-    fn user_for_file(path: &Path) -> Result<String, Error> {
-        if path.ends_with("0") {
-            Ok("other user".into())
-        } else {
-            Ok("test user".into())
-        }
-    }
-
-    fn current_user(&self) -> Result<String, Error> {
-        // XXX: This is ugly.  We don't have a good way to read the user database in a portable
-        // way, and we don't have a good way to find out the current user, since Rust unfortunately
-        // doesn't offer this functionality.  There don't appear to be a lot of good, portable
-        // crate options, either.  As a result, we create a temporary file and find the user ID
-        // that way.
-        let temp_path = Builder::new()
-            .rand_bytes(12)
-            .suffix(".temp")
-            .tempfile_in(&self.root)?
-            .into_temp_path();
-        Self::user_for_file(&temp_path)
-    }
-}
-
-struct LockSetIterator {
-    data: Vec<fs::DirEntry>,
-    err: Option<Error>,
-    item: usize,
-    done: bool,
-}
-
-impl LockSetIterator {
-    fn new(path: &Path) -> LockSetIterator {
-        let data: Result<Vec<fs::DirEntry>, io::Error> = match fs::read_dir(path) {
-            Ok(iter) => iter.collect(),
-            Err(e) => Err(e),
-        };
-        let (data, err) = match data {
-            Ok(mut v) => {
-                v.sort_by_key(fs::DirEntry::file_name);
-                (v, None)
-            }
-            Err(e) => (vec![], Some(e.into())),
-        };
-        LockSetIterator {
-            data,
-            err,
-            item: 0,
-            done: false,
-        }
-    }
-}
-
-impl Iterator for LockSetIterator {
-    type Item = Result<Lock, Error>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match (self.err.take(), self.done) {
-            (_, true) => None,
-            (Some(e), false) => {
-                self.done = true;
-                Some(Err(e))
-            }
-            (None, false) => {
-                while self.item < self.data.len() {
-                    let pos = self.item;
-                    self.item += 1;
-                    let item = &self.data[pos];
-                    let path = item.path();
-                    let root = match path.parent() {
-                        Some(r) => r,
-                        None => continue,
-                    };
-                    let filename = item.file_name();
-                    let filename = filename.to_string_lossy();
-                    match Lock::from_id(root.to_path_buf(), &filename) {
-                        Ok(Some(l)) => return Some(Ok(l)),
-                        _ => continue,
-                    };
-                }
-                None
-            }
-        }
-    }
-}
-
-struct LockSet {
-    path: PathBuf,
-}
-
-impl LockSet {
-    fn new(path: &Path) -> LockSet {
-        LockSet {
-            path: path.to_owned(),
-        }
-    }
-
-    fn iter(&self) -> LockSetIterator {
-        LockSetIterator::new(&self.path)
-    }
-}
 
 struct Processor<'a, R: io::Read, W: io::Write> {
     handler: PktLineHandler<R, W>,
@@ -385,12 +60,6 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
             timestamp,
             backend: Box::new(LocalBackend::new(lfs_path, umask, timestamp)),
         }
-    }
-
-    fn lock_path(&self) -> PathBuf {
-        let mut buf = PathBuf::from(self.lfs_path);
-        buf.push("locks");
-        buf
     }
 
     fn version(&mut self) -> Result<Status, Error> {
@@ -567,26 +236,19 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
                 ))
             }
         };
-        let now = self.timestamp.unwrap_or_else(|| {
-            match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-                Ok(d) => d.as_secs() as i64,
-                Err(e) => -(e.duration().as_secs() as i64),
-            }
-        });
+        let lock_backend = self.backend.lock_backend();
         let mut retried = false;
         while !retried {
-            let (ok, lock) = match Lock::new(self.lock_path(), path.clone(), now) {
+            let (ok, lock) = match lock_backend.create(&path) {
                 Ok(l) => (true, l),
-                Err(e) if e.kind() == ErrorKind::Conflict => {
-                    match Lock::from_path(self.lock_path(), path) {
-                        Ok(Some(l)) => (false, l),
-                        Ok(None) => {
-                            retried = true;
-                            continue;
-                        }
-                        Err(e) => return Err(e),
+                Err(e) if e.kind() == ErrorKind::Conflict => match lock_backend.from_path(&path) {
+                    Ok(Some(l)) => (false, l),
+                    Ok(None) => {
+                        retried = true;
+                        continue;
                     }
-                }
+                    Err(e) => return Err(e),
+                },
                 Err(e) => return Err(e),
             };
             return if ok {
@@ -608,7 +270,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
         cursor: Option<&Bytes>,
         use_owner_id: bool,
     ) -> Result<Status, Error> {
-        match (Lock::from_path(self.lock_path(), path), cursor) {
+        match (self.backend.lock_backend().from_path(path), cursor) {
             (Err(e), _) => Err(e),
             (Ok(None), _) => self.error(404, "not found"),
             (Ok(Some(l)), Some(id)) if l.id().as_bytes() < id => self.error(404, "not found"),
@@ -639,8 +301,9 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
         if let Some(path) = args.get(b"path" as &[u8]) {
             return self.list_locks_for_path(path, cursor, use_owner_id);
         };
-        let lock_path = self.lock_path();
-        let r: Result<Vec<_>, _> = LockSet::new(&lock_path)
+        let r: Result<Vec<_>, _> = self
+            .backend
+            .lock_backend()
             .iter()
             .skip_while(|item| match (item, cursor) {
                 (Err(_), _) => false,
@@ -672,10 +335,11 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
                 ))
             }
         };
-        match Lock::from_id(self.lock_path(), s) {
+        let lock_backend = self.backend.lock_backend();
+        match lock_backend.from_id(s) {
             Ok(Some(l)) => {
                 let args = l.as_arguments();
-                match l.unlock() {
+                match lock_backend.unlock(l) {
                     Ok(()) => Ok(Status::new_success_with_code(200, args)),
                     Err(e) if e.io_kind() == io::ErrorKind::NotFound => {
                         self.error(404, "not found")
@@ -991,6 +655,35 @@ mod tests {
         fs::metadata(&path).unwrap_err();
     }
 
+    #[cfg(windows)]
+    fn username() -> String {
+        "unknown".into()
+    }
+
+    #[cfg(unix)]
+    fn username() -> String {
+        format!("uid {}", unsafe { libc::getuid() })
+    }
+
+    fn replace_user_id(transcript: &str) -> String {
+        let name = username();
+        transcript.replace(
+            "0018ownername=test user\n",
+            &format!(
+                "{:04x}ownername={}\n",
+                4 + "ownername=\n".len() + name.len(),
+                name
+            ),
+        ).replace(
+            "0059ownername d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28 test user\n",
+            &format!(
+                "{:04x}ownername d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28 {}\n",
+                4 + "ownername d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28 \n".len() + name.len(),
+                name
+            ),
+        )
+    }
+
     #[test]
     fn failed_verify() {
         let fixtures = TestRepository::new();
@@ -1211,7 +904,7 @@ mod tests {
 0000004cunlock d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28
 0000";
         let result = run(&fixtures, "upload", message).unwrap();
-        let expected: &[u8] = b"000eversion=1
+        let expected: &str = "000eversion=1
 0000000fstatus 200
 00010000000fstatus 201
 0048id=d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28
@@ -1235,6 +928,7 @@ mod tests {
 0028locked-at=2001-09-17T00:00:00+00:00
 0018ownername=test user
 0000";
-        assert_eq!(result, expected);
+        let expected = replace_user_id(expected);
+        assert_eq!(result, expected.as_bytes());
     }
 }
