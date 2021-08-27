@@ -183,7 +183,7 @@ pub struct Oid {
 
 impl Oid {
     pub fn new(oid: &[u8]) -> Result<Self, Error> {
-        if Self::valid(&oid) {
+        if Self::valid(oid) {
             // Note that because we've validated that this string contains only lowercase hex
             // characters, this will always be a complete, non-lossy transformation.
             Ok(Oid {
