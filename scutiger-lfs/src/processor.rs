@@ -1,9 +1,13 @@
 #![allow(clippy::mutable_key_type)]
 #![allow(clippy::match_like_matches_macro)]
 
+use backend::Backend;
 use bytes::Bytes;
+use digest::Digest;
 use scutiger_core::errors::{Error, ErrorKind};
 use scutiger_core::pktline;
+use sha2::Sha256;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::io;
@@ -334,5 +338,379 @@ impl<'a, R: io::Read, H: digest::Digest + io::Write> io::Read for HashingReader<
         self.hash.write_all(&buf[0..count])?;
         self.size += count as u64;
         Ok(count)
+    }
+}
+
+pub struct Processor<'a, R: io::Read, W: io::Write> {
+    handler: PktLineHandler<R, W>,
+    backend: Box<dyn Backend + 'a>,
+}
+
+impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
+    pub fn new(handler: PktLineHandler<R, W>, backend: Box<dyn Backend + 'a>) -> Self {
+        Processor { handler, backend }
+    }
+
+    fn version(&mut self) -> Result<Status, Error> {
+        self.handler.read_to_flush()?;
+        Ok(Status::new_success(vec![]))
+    }
+
+    fn error(&self, code: u32, msg: &str) -> Result<Status, Error> {
+        Ok(Status::new_failure(code, msg.as_bytes()))
+    }
+
+    fn read_batch(&mut self, mode: Mode) -> Result<Vec<BatchItem>, Error> {
+        if let Err(e) = self.handler.read_to_delim() {
+            return Err(Error::new(ErrorKind::ParseError, Some(e)));
+        }
+        let data = match self.handler.read_to_flush() {
+            Ok(v) => v,
+            Err(e) => return Err(Error::new(ErrorKind::ParseError, Some(e))),
+        };
+        let oids = data
+            .iter()
+            .map(|line| {
+                if line.is_empty() || line[line.len() - 1] != b'\n' {
+                    return Err(Error::new_simple(ErrorKind::InvalidPacket));
+                }
+                let pair: Vec<Bytes> = line[0..line.len()]
+                    .split(|&b| b == b' ')
+                    .map(|x| x.into())
+                    .collect();
+                if pair.len() != 2 || pair[1].is_empty() {
+                    return Err(Error::new_simple(ErrorKind::ParseError));
+                }
+                let size = &pair[1];
+                let size = match String::from_utf8_lossy(&size[0..size.len() - 1]).parse() {
+                    Ok(x) => x,
+                    Err(_) => {
+                        return Err(Error::from_message(
+                            ErrorKind::InvalidInteger,
+                            format!("got {:?}", pair[1]),
+                        ))
+                    }
+                };
+                Ok((Oid::new(&pair[0])?, size))
+            })
+            .collect::<Result<Vec<_>, Error>>();
+        self.backend.batch(mode, &oids?)
+    }
+
+    fn batch_data(
+        &mut self,
+        mode: Mode,
+        present_action: &str,
+        missing_action: &str,
+    ) -> Result<Status, Error> {
+        let batch = self.read_batch(mode)?;
+        Ok(batch
+            .iter()
+            .map(|item| {
+                let size = format!("{}", item.size);
+                let action = if item.present {
+                    present_action
+                } else {
+                    missing_action
+                };
+                [
+                    item.oid.value(),
+                    b" ",
+                    size.as_bytes(),
+                    b" ",
+                    action.as_bytes(),
+                    b"\n",
+                ]
+                .join(b"" as &[u8])
+                .into()
+            })
+            .collect())
+    }
+
+    fn upload_batch(&mut self) -> Result<Status, Error> {
+        self.batch_data(Mode::Upload, "noop", "upload")
+    }
+
+    fn download_batch(&mut self) -> Result<Status, Error> {
+        self.batch_data(Mode::Download, "download", "noop")
+    }
+
+    fn size_from_arguments(args: &BTreeMap<Bytes, Bytes>) -> Result<u64, Error> {
+        let size = match args.get(b"size" as &[u8]) {
+            Some(x) => x,
+            None => {
+                return Err(Error::from_message(
+                    ErrorKind::MissingData,
+                    "missing required size header",
+                ))
+            }
+        };
+        ArgumentParser::parse_integer(size)
+    }
+
+    fn put_object(&mut self, oid: &[u8]) -> Result<Status, Error> {
+        let oid = Oid::new(oid)?;
+        let args = ArgumentParser::parse(&self.handler.read_to_delim()?)?;
+        let expected_size = Self::size_from_arguments(&args)?;
+        let mut rdr = HashingReader::new(&mut self.handler.rdr, Sha256::new());
+        let state = self.backend.start_upload(&oid, &mut rdr, &args)?;
+        let actual_size = rdr.size();
+        match actual_size.cmp(&expected_size) {
+            Ordering::Less => {
+                return Err(Error::from_message(
+                    ErrorKind::MissingData,
+                    format!("expected {} bytes, got {}", expected_size, actual_size),
+                ))
+            }
+            Ordering::Greater => {
+                return Err(Error::from_message(
+                    ErrorKind::ExtraData,
+                    format!("expected {} bytes, got {}", expected_size, actual_size),
+                ))
+            }
+            Ordering::Equal => (),
+        }
+
+        // We're now confident we have the right number of bytes.  Let's check that the OIDs match.
+        // This does not need to be constant time because the user has provided both sides of the
+        // data and there's no secret values to compare.
+        let actual_oid = rdr.oid()?;
+        if actual_oid != oid {
+            return Err(Error::from_message(
+                ErrorKind::CorruptData,
+                format!("expected oid {}, got {}", oid, actual_oid),
+            ));
+        }
+        self.backend.finish_upload(state)?;
+        Ok(Status::success())
+    }
+
+    fn verify_object(&mut self, oid: &[u8]) -> Result<Status, Error> {
+        let args = ArgumentParser::parse(&self.handler.read_to_flush()?)?;
+        let oid = Oid::new(oid)?;
+        self.backend.verify(&oid, &args)
+    }
+
+    fn get_object(&mut self, oid: &[u8]) -> Result<Status, Error> {
+        let args = ArgumentParser::parse(&self.handler.read_to_flush()?)?;
+        let oid = Oid::new(oid)?;
+        let (rdr, size) = match self.backend.download(&oid, &args) {
+            Ok(x) => x,
+            Err(e) if e.io_kind() == io::ErrorKind::NotFound => {
+                return Ok(Status::new_failure(404, "not found".as_bytes()))
+            }
+            Err(e) => return Err(e),
+        };
+        let args = match size {
+            Some(size) => vec![format!("size={}\n", size).into()],
+            None => vec![],
+        };
+        Ok(Status::new_reader(args, rdr))
+    }
+
+    fn lock(&mut self) -> Result<Status, Error> {
+        let data = match self.handler.read_to_flush() {
+            Ok(v) => v,
+            Err(e) => return Err(Error::new(ErrorKind::ParseError, Some(e))),
+        };
+        let args = ArgumentParser::parse(&data)?;
+        let path = args.get(b"path" as &[u8]);
+        let refname = args.get(b"refname" as &[u8]);
+        let path = match (path, refname) {
+            (Some(path), Some(_)) => path,
+            (_, _) => {
+                return Err(Error::from_message(
+                    ErrorKind::MissingData,
+                    "both path and refname required",
+                ))
+            }
+        };
+        let lock_backend = self.backend.lock_backend();
+        let mut retried = false;
+        while !retried {
+            let (ok, lock) = match lock_backend.create(path) {
+                Ok(l) => (true, l),
+                Err(e) if e.kind() == ErrorKind::Conflict => match lock_backend.from_path(path) {
+                    Ok(Some(l)) => (false, l),
+                    Ok(None) => {
+                        retried = true;
+                        continue;
+                    }
+                    Err(e) => return Err(e),
+                },
+                Err(e) => return Err(e),
+            };
+            return if ok {
+                Ok(Status::new_success_with_code(201, lock.as_arguments()))
+            } else {
+                Ok(Status::new_failure_with_args(
+                    409,
+                    lock.as_arguments(),
+                    b"conflict",
+                ))
+            };
+        }
+        unreachable!()
+    }
+
+    fn list_locks_for_path(
+        &mut self,
+        path: &Bytes,
+        cursor: Option<&Bytes>,
+        use_owner_id: bool,
+    ) -> Result<Status, Error> {
+        match (self.backend.lock_backend().from_path(path), cursor) {
+            (Err(e), _) => Err(e),
+            (Ok(None), _) => self.error(404, "not found"),
+            (Ok(Some(l)), Some(id)) if l.id().as_bytes() < id => self.error(404, "not found"),
+            (Ok(Some(l)), _) => l.as_lock_spec(use_owner_id).map(Status::new_success),
+        }
+    }
+
+    fn list_locks(&mut self, use_owner_id: bool) -> Result<Status, Error> {
+        let args = match self.handler.read_to_flush() {
+            Ok(v) => v,
+            Err(e) => return Err(Error::new(ErrorKind::ParseError, Some(e))),
+        };
+        let args = ArgumentParser::parse(&args)?;
+        let mut limit = args
+            .get(b"limit" as &[u8])
+            .map(|x| ArgumentParser::parse_integer(x))
+            .unwrap_or(Ok(100))?;
+        if limit == 0 {
+            return Err(Error::from_message(
+                ErrorKind::NotAllowed,
+                "bizarre request for no data",
+            ));
+        } else if limit > 100 {
+            // Let's prevent the user from trying to DoS us.
+            limit = 100
+        }
+        let cursor = args.get(b"cursor" as &[u8]);
+        if let Some(path) = args.get(b"path" as &[u8]) {
+            return self.list_locks_for_path(path, cursor, use_owner_id);
+        };
+        let r: Result<Vec<_>, _> = self
+            .backend
+            .lock_backend()
+            .iter()
+            .skip_while(|item| match (item, cursor) {
+                (Err(_), _) => false,
+                (Ok(l), Some(cursor)) => l.id().as_bytes() < cursor,
+                (Ok(_), None) => false,
+            })
+            .take(limit + 1)
+            .collect();
+        let items = r?;
+        let lock_specs: Result<Vec<_>, _> =
+            items.iter().map(|l| l.as_lock_spec(use_owner_id)).collect();
+        let lock_specs = lock_specs?.iter().flatten().cloned().collect();
+        let next_cursor: Vec<Bytes> = if items.len() == limit + 1 {
+            vec![format!("next-cursor={}\n", items[limit].id()).into()]
+        } else {
+            vec![]
+        };
+        Ok(Status::new_success_with_data(200, next_cursor, lock_specs))
+    }
+
+    fn unlock(&mut self, id: &[u8]) -> Result<Status, Error> {
+        self.handler.read_to_flush()?;
+        let s = match std::str::from_utf8(id) {
+            Ok(s) => s,
+            Err(_) => {
+                return Err(Error::from_message(
+                    ErrorKind::CorruptData,
+                    "invalid or corrupt ID",
+                ))
+            }
+        };
+        let lock_backend = self.backend.lock_backend();
+        match lock_backend.from_id(s) {
+            Ok(Some(l)) => {
+                let args = l.as_arguments();
+                match lock_backend.unlock(l) {
+                    Ok(()) => Ok(Status::new_success_with_code(200, args)),
+                    Err(e) if e.io_kind() == io::ErrorKind::NotFound => {
+                        self.error(404, "not found")
+                    }
+                    Err(e) if e.io_kind() == io::ErrorKind::PermissionDenied => {
+                        self.error(403, "forbidden")
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+            Ok(None) => self.error(404, "not found"),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn process_commands(&mut self, mode: Mode) -> Result<(), Error> {
+        loop {
+            let pkt = match self.handler.rdr.read_packet() {
+                Ok(p) => p,
+                Err(e) if e.io_kind() == io::ErrorKind::UnexpectedEof => return Ok(()),
+                Err(e) => return Err(e),
+            };
+            let msgs: Vec<_> = match pkt.data() {
+                Some(b"") => {
+                    self.handler.send_error(400, "no command provided")?;
+                    continue;
+                }
+                Some(bs) => {
+                    let bs = if bs[bs.len() - 1] == b'\n' {
+                        &bs[0..bs.len() - 1]
+                    } else {
+                        bs
+                    };
+                    bs.split(|&b| b == b' ').collect()
+                }
+                None => {
+                    self.handler.send_error(400, "unknown command")?;
+                    continue;
+                }
+            };
+            let resp = match (msgs[0], msgs.get(1), mode) {
+                (b"version", Some(&b"1"), _) => self.version(),
+                (b"version", _, _) => self.error(400, "unknown version"),
+                (b"batch", None, Mode::Upload) => self.upload_batch(),
+                (b"batch", None, Mode::Download) => self.download_batch(),
+                (b"put-object", Some(oid), Mode::Upload) => self.put_object(oid),
+                (b"put-object", Some(_), _) => self.error(403, "not allowed"),
+                (b"verify-object", Some(oid), Mode::Upload) => self.verify_object(oid),
+                (b"verify-object", Some(_), _) => self.error(403, "not allowed"),
+                (b"get-object", Some(oid), Mode::Download) => self.get_object(oid),
+                (b"get-object", Some(_), _) => self.error(403, "not allowed"),
+                (b"lock", None, Mode::Upload) => self.lock(),
+                (b"list-lock", None, Mode::Download) => self.list_locks(false),
+                (b"list-lock", None, Mode::Upload) => self.list_locks(true),
+                (b"unlock", Some(id), Mode::Upload) => self.unlock(id),
+                (b"quit", None, _) => {
+                    self.handler.send_status(Status::success())?;
+                    return Ok(());
+                }
+                (_, _, _) => self.error(400, "unknown command"),
+            };
+            match resp {
+                Ok(st) => self.handler.send_status(st),
+                Err(e) => match e.kind() {
+                    ErrorKind::BadPktlineHeader
+                    | ErrorKind::InvalidPacket
+                    | ErrorKind::UnexpectedPacket
+                    | ErrorKind::InvalidLFSOid
+                    | ErrorKind::InvalidInteger
+                    | ErrorKind::MissingData
+                    | ErrorKind::ExtraData
+                    | ErrorKind::CorruptData
+                    | ErrorKind::NotAllowed
+                    | ErrorKind::UnknownCommand => self
+                        .handler
+                        .send_status(Status::new_failure(400, format!("error: {}", e).as_bytes())),
+                    _ => self.handler.send_status(Status::new_failure(
+                        500,
+                        format!("internal error: {}", e).as_bytes(),
+                    )),
+                },
+            }?;
+        }
     }
 }
