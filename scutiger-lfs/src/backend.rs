@@ -1,3 +1,5 @@
+#![allow(clippy::mutable_key_type)]
+
 use super::processor::{BatchItem, Mode, Oid, Status};
 use bytes::{Bytes, BytesMut};
 use scutiger_core::errors::Error;

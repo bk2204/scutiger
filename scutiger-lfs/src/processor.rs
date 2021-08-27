@@ -1,3 +1,4 @@
+#![allow(clippy::mutable_key_type)]
 #![allow(clippy::match_like_matches_macro)]
 
 use bytes::Bytes;
