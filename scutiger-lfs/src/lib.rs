@@ -1,4 +1,5 @@
 extern crate bytes;
+extern crate digest;
 extern crate chrono;
 extern crate scutiger_core;
 extern crate sha2;
