@@ -90,7 +90,7 @@ impl<'p> Program<'p> {
                     .map(|r| (r.target(), Self::commit_date_for(&r), r))
                     .filter(|&(oid, time, _)| oid.is_some() && time.is_some())
                     .collect();
-                refs.sort_by(|ref a, ref b| b.1.cmp(&a.1));
+                refs.sort_by(|a, b| b.1.cmp(&a.1));
                 Ok(Box::new(
                     refs.into_iter()
                         .filter_map(|(_, _, r)| Some(r.name()?.to_string())),
@@ -103,7 +103,7 @@ impl<'p> Program<'p> {
                     .map(|r| (r.target(), Self::author_date_for(&r), r))
                     .filter(|&(oid, time, _)| oid.is_some() && time.is_some())
                     .collect();
-                refs.sort_by(|ref a, ref b| b.1.cmp(&a.1));
+                refs.sort_by(|a, b| b.1.cmp(&a.1));
                 Ok(Box::new(
                     refs.into_iter()
                         .filter_map(|(_, _, r)| Some(r.name()?.to_string())),
@@ -118,7 +118,7 @@ impl<'p> Program<'p> {
     /// (corresponding logically to standard output and standard error) and returns an exit code.
     /// For programmatic execution, see `run`.
     fn main<O: io::Write, E: io::Write>(&self, output: &mut O, error: &mut E) -> i32 {
-        match self.run(&self.repo) {
+        match self.run(self.repo) {
             Ok(iter) => {
                 for s in iter {
                     writeln!(output, "{}", s).unwrap();
