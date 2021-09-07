@@ -304,7 +304,7 @@ impl LockFile {
             }
             Err(e) => return Err(e.into()),
         };
-        f.write_all(&data)?;
+        f.write_all(data)?;
         f.flush()?;
         drop(f);
         Ok(())
@@ -606,7 +606,7 @@ struct Oid {
 
 impl Oid {
     fn new(oid: &[u8]) -> Result<Self, Error> {
-        if Self::valid(&oid) {
+        if Self::valid(oid) {
             // Note that because we've validated that this string contains only lowercase hex
             // characters, this will always be a complete, non-lossy transformation.
             Ok(Oid {
@@ -794,7 +794,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
                 ))
             }
         };
-        ArgumentParser::parse_integer(&size)
+        ArgumentParser::parse_integer(size)
     }
 
     fn put_object(&mut self, oid: &[u8]) -> Result<Status, Error> {
@@ -859,7 +859,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
             Err(e) => return Err(Error::new(ErrorKind::ParseError, Some(e))),
         };
         let oid = Oid::new(oid)?;
-        let path = oid.expected_path(&self.lfs_path);
+        let path = oid.expected_path(self.lfs_path);
         let metadata = match fs::metadata(path) {
             Ok(m) => m,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return self.error(404, "not found"),
@@ -875,7 +875,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
 
     fn get_object(&mut self, oid: &[u8]) -> Result<Status, Error> {
         let oid = Oid::new(oid)?;
-        let path = oid.expected_path(&self.lfs_path);
+        let path = oid.expected_path(self.lfs_path);
         let file = match fs::File::open(path) {
             Ok(f) => f,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return self.error(404, "not found"),
@@ -923,7 +923,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
             let (ok, lock) = match Lock::new(self.lock_path(), path.clone(), now) {
                 Ok(l) => (true, l),
                 Err(e) if e.kind() == ErrorKind::Conflict => {
-                    match Lock::from_path(self.lock_path(), &path) {
+                    match Lock::from_path(self.lock_path(), path) {
                         Ok(Some(l)) => (false, l),
                         Ok(None) => {
                             retried = true;
@@ -969,7 +969,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
         let args = ArgumentParser::parse(&args)?;
         let mut limit = args
             .get(b"limit" as &[u8])
-            .map(|x| ArgumentParser::parse_integer(&x))
+            .map(|x| ArgumentParser::parse_integer(x))
             .unwrap_or(Ok(100))?;
         if limit == 0 {
             return Err(Error::from_message(
