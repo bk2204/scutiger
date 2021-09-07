@@ -176,7 +176,7 @@ impl<W: io::Write> Writer<W> {
     fn write_one(writer: &mut W, buf: &[u8]) -> Result<usize, Error> {
         let header = format!("{:04x}", buf.len() + 4);
         writer.write_all(header.as_bytes())?;
-        writer.write_all(&buf)?;
+        writer.write_all(buf)?;
         Ok(buf.len())
     }
 
@@ -204,7 +204,7 @@ impl<W: io::Write> io::Write for Writer<W> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
         let mut total = 0;
         for chunk in buf.chunks(Self::MAX_PACKET_LEN) {
-            total += match Self::write_one(&mut self.writer, &chunk) {
+            total += match Self::write_one(&mut self.writer, chunk) {
                 Ok(sz) => sz,
                 Err(e) => return Err(e.into()),
             }
