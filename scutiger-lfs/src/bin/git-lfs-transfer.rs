@@ -355,6 +355,7 @@ mod tests {
         let message = b"000eversion 1
 0000000abatch
 0011transfer=ssh
+0015hash-algo=sha256
 001crefname=refs/heads/main
 000100476ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6
 0048ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626 32
@@ -389,6 +390,25 @@ mod tests {
 0000000fstatus 200
 0000000fstatus 200
 0000";
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn invalid_hash_algo() {
+        let fixtures = TestRepository::new();
+        let message = b"000eversion 1
+0000000abatch
+0011transfer=ssh
+0015hash-algo=sha512
+001crefname=refs/heads/main
+000100476ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090 6
+0048ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626 32
+0000";
+        let result = run(&fixtures, "upload", message).unwrap();
+        let expected: &[u8] = b"000eversion=1
+0000000fstatus 200
+00010000000fstatus 400
+00010040error: not allowed: sha512 is not a permitted hash algorithm0000";
         assert_eq!(result, expected);
     }
 

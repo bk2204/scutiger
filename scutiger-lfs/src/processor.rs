@@ -361,13 +361,25 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
     }
 
     fn read_batch(&mut self, mode: Mode) -> Result<Vec<BatchItem>, Error> {
-        if let Err(e) = self.handler.read_to_delim() {
-            return Err(Error::new(ErrorKind::ParseError, Some(e)));
-        }
+        let args = ArgumentParser::parse(&self.handler.read_to_delim()?)?;
         let data = match self.handler.read_to_flush() {
             Ok(v) => v,
             Err(e) => return Err(Error::new(ErrorKind::ParseError, Some(e))),
         };
+        let hash_algo = args.get(b"hash-algo" as &[u8]);
+        match hash_algo.map(|x| x as &[u8]) {
+            Some(b"sha256") => (),
+            Some(x) => {
+                return Err(Error::from_message(
+                    ErrorKind::NotAllowed,
+                    format!(
+                        "{} is not a permitted hash algorithm",
+                        String::from_utf8_lossy(x)
+                    ),
+                ))
+            }
+            None => (),
+        }
         let oids = data
             .iter()
             .map(|line| {
