@@ -1,0 +1,10 @@
+scutiger (0.2.0-1) UNRELEASED; urgency=medium
+
+  * Split out the git-lfs-transfer code into a library for reuse.
+  * Structure the code to use a generic backend interface.
+  * Add support for hash algorithm negotiation.  Note that we continue to
+    support only SHA-256, as does the client.
+  * Add support for the final version of the Git LFS transfer protocol which is
+    to be shipped in Git LFS 3.0.0.
+
+ -- brian m. carlson <sandals@crustytoothpaste.net>  Wed, 22 Sep 2021 00:00:00 -0000
