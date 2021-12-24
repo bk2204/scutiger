@@ -587,7 +587,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
         let args = ArgumentParser::parse(&args)?;
         let mut limit = args
             .get(b"limit" as &[u8])
-            .map(|x| ArgumentParser::parse_integer(x))
+            .map(ArgumentParser::parse_integer)
             .unwrap_or(Ok(100))?;
         if limit == 0 {
             return Err(Error::from_message(
