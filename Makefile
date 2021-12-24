@@ -107,7 +107,9 @@ package-%: scutiger-% scutiger-%/README.md
 ci: $(CI_TARGETS)
 
 ci-%: test/Dockerfile.%.stamp
-	docker run --rm $$(cat "$<") \
+	docker run --rm \
+        -e CARGO_NET_GIT_FETCH_WITH_CLI=true \
+        $$(cat "$<") \
 		sh -c 'cd /usr/src/scutiger && make test-full'
 
 test-full:
