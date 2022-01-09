@@ -228,18 +228,18 @@ impl LocalBackendLock {
         Some((time, v[2].clone().into()))
     }
 
+    #[cfg(windows)]
     fn current_user(&self) -> Result<String, Error> {
-        // XXX: This is ugly.  We don't have a good way to read the user database in a portable
-        // way, and we don't have a good way to find out the current user, since Rust unfortunately
-        // doesn't offer this functionality.  There don't appear to be a lot of good, portable
-        // crate options, either.  As a result, we create a temporary file and find the user ID
-        // that way.
-        let temp_path = Builder::new()
-            .rand_bytes(12)
-            .suffix(".temp")
-            .tempfile_in(&self.root)?
-            .into_temp_path();
-        LocalLockBackend::user_for_file(&temp_path)
+        Ok("unknown".into())
+    }
+
+    #[cfg(unix)]
+    fn current_user(&self) -> Result<String, Error> {
+        let uid = unsafe { libc::getuid() } as u32;
+        match passwd::Passwd::from_uid(uid) {
+            Some(pwd) => Ok(pwd.name),
+            None => Ok(format!("uid {}", uid)),
+        }
     }
 }
 
@@ -319,7 +319,10 @@ impl<'a> LocalLockBackend<'a> {
     fn user_for_file(path: &Path) -> Result<String, Error> {
         use std::os::unix::fs::MetadataExt;
         let st = fs::metadata(path)?;
-        Ok(format!("uid {}", st.uid()))
+        match passwd::Passwd::from_uid(st.uid()) {
+            Some(pwd) => Ok(pwd.name),
+            None => Ok(format!("uid {}", st.uid())),
+        }
     }
 }
 

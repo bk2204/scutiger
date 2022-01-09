@@ -11,6 +11,8 @@ extern crate digest;
 extern crate git2;
 extern crate hex;
 extern crate libc;
+#[cfg(unix)]
+extern crate passwd;
 extern crate scutiger_core;
 extern crate scutiger_lfs;
 extern crate sha2;
@@ -267,7 +269,11 @@ mod tests {
 
     #[cfg(unix)]
     fn username() -> String {
-        format!("uid {}", unsafe { libc::getuid() })
+        let uid = unsafe { libc::getuid() } as u32;
+        match passwd::Passwd::from_uid(uid) {
+            Some(pwd) => pwd.name,
+            None => format!("uid {}", uid),
+        }
     }
 
     fn replace_user_id(transcript: &str) -> String {

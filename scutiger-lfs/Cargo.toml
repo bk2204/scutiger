@@ -36,5 +36,8 @@ sha2 = "0.9"
 tempfile = "3"
 chrono = "^0.4"
 
+[target.'cfg(unix)'.dependencies]
+passwd = "0.0"
+
 [dev-dependencies]
 pretty_assertions = "0.6"
