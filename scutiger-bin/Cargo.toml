@@ -17,7 +17,7 @@ rust-version = "1.41.1"
 
 [dependencies]
 clap = "^2.32"
-pcre2 = "^0.1"
+pcre2 = "^0.2.3"
 libc = "^0.2"
 # We don't require any sort of network connectivity, so don't bother building
 # it.
