@@ -1,6 +1,6 @@
 [package]
 name = "scutiger-bin"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["brian m. carlson <sandals@crustytoothpaste.net>"]
 description = "a set of Git utilities for people who use Git a lot"
 repository = "https://github.com/bk2204/scutiger"
@@ -23,7 +23,7 @@ libc = "^0.2"
 # it.
 git2 = { version = "0.13", default-features = false }
 pkg-config = "^0.3"
-scutiger-core = { path = "../scutiger-core", version = "0.2.0", features = ["pcre"] }
+scutiger-core = { path = "../scutiger-core", version = "0.3.0", features = ["pcre"] }
 
 [dev-dependencies]
 tempfile = "3"

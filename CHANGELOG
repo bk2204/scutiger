@@ -1,3 +1,10 @@
+scutiger (0.3.0-1) UNRELEASED; urgency=medium
+
+  * Bump pcre2 and thread_local to fix a security vulnerability in the latter.
+  * Switch to using the passwd crate on unix to give better lock information.
+
+ -- brian m. carlson <sandals@crustytoothpaste.net>  Wed, 22 Sep 2021 00:00:00 -0000
+
 scutiger (0.2.0-1) UNRELEASED; urgency=medium
 
   * Split out the git-lfs-transfer code into a library for reuse.
