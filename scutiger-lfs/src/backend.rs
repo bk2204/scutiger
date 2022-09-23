@@ -48,6 +48,7 @@ pub trait Lock {
     }
 }
 
+#[allow(clippy::wrong_self_convention)]
 pub trait LockBackend {
     fn create(&self, path: &Bytes) -> Result<Box<dyn Lock>, Error>;
     fn unlock(&self, lock: Box<dyn Lock>) -> Result<(), Error> {
