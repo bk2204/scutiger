@@ -214,7 +214,7 @@ impl LocalBackendLock {
         let mut hash = Sha256::new();
         hash.update(Self::VERSION.as_bytes());
         hash.update(b":");
-        hash.update(&path);
+        hash.update(path);
         hex::encode(hash.finalize())
     }
 
