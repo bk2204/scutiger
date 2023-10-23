@@ -29,7 +29,7 @@ git-lfs-transfer::
 
 == Building
 
-You will need Rust 1.41.1 or later, Cargo, GNU Make, and Git.
+You will need Rust 1.63 or later, Cargo, GNU Make, and Git.
 If you additionally have zlib, the 8-bit version of libpcre2, and libgit2 available, Scutiger will dynamically link against them.
 This is highly recommended for security reasons.
 
@@ -38,10 +38,10 @@ Type `make test` to run the tests.
 
 == Compatibility
 
-Scutiger utilities are designed to compile with Rust 1.41.1 or later.
+Scutiger utilities are designed to compile with Rust 1.63 or later.
 They may also work on earlier versions, but this has not been tested.
 
-Dependencies are pinned to versions which work on Rust 1.41.1.
+Dependencies are pinned to versions which work on the supported version of Rust.
 
 The code is written in a generic way so it should function on most platforms; however, only Linux is tested at the moment.
 

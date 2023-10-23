@@ -261,7 +261,7 @@ impl Lock for LocalBackendLock {
     }
 
     fn formatted_timestamp(&self) -> String {
-        Utc.timestamp(self.time, 0).to_rfc3339()
+        Utc.timestamp_opt(self.time, 0).unwrap().to_rfc3339()
     }
 
     fn ownername(&self) -> &str {

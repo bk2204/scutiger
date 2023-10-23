@@ -12,11 +12,11 @@ include = [
     "README.md",
     "LICENSE",
 ]
-rust-version = "1.41.1"
+rust-version = "1.63"
 
 [dependencies]
 pcre2 = { version = "^0.2.3", optional = true }
-git2 = { version = "0.13", default-features = false }
+git2 = { version = "0.16", default-features = false }
 pkg-config = "^0.3"
 
 [dev-dependencies]
