@@ -209,7 +209,7 @@ impl Oid {
     pub fn valid(b: &[u8]) -> bool {
         b.len() == 64
             && b.iter()
-                .all(|&x| (b'0'..=b'9').contains(&x) || (b'a'..=b'f').contains(&x))
+                .all(|&x| x.is_ascii_digit() || (b'a'..=b'f').contains(&x))
     }
 
     /// Returns the expected path for this object given the `path` argument, which should be a
