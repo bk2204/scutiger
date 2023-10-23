@@ -28,7 +28,7 @@ bytes = "0.4"
 clap = { version = "^2.32", default-features = false }
 digest = "0.9"
 hex = "0.4"
-git2 = { version = "0.13", default-features = false }
+git2 = { version = "0.16", default-features = false }
 pkg-config = "^0.3"
 libc = "^0.2"
 scutiger-core = { path = "../scutiger-core", version = "0.3.0", features = [] }

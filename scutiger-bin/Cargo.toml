@@ -21,7 +21,7 @@ pcre2 = "^0.2.3"
 libc = "^0.2"
 # We don't require any sort of network connectivity, so don't bother building
 # it.
-git2 = { version = "0.13", default-features = false }
+git2 = { version = "0.16", default-features = false }
 pkg-config = "^0.3"
 scutiger-core = { path = "../scutiger-core", version = "0.3.0", features = ["pcre"] }
 
