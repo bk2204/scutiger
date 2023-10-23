@@ -12,7 +12,7 @@ include = [
     "README.md",
     "LICENSE",
 ]
-rust-version = "1.41.1"
+rust-version = "1.63"
 
 [dependencies]
 pcre2 = { version = "^0.2.3", optional = true }

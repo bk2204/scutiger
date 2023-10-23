@@ -1,7 +1,7 @@
-FROM debian:stretch
+FROM rust:1.63
 
 <%= erb 'test/include/apt.erb' -%>
 
-RUN apt-get -y install rustc cargo
+<%= erb 'test/include/rustup.erb' -%>
 
 <%= erb 'test/include/main.erb' -%>

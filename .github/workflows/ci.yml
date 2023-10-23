@@ -2,20 +2,20 @@ name: ci
 on: [push, pull_request]
 
 jobs:
-  build-stretch:
-    name: Linux (Debian stretch)
+  build-bookworm:
+    name: Linux (Debian bookworm)
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
     - uses: actions/setup-ruby@v1
-    - run: make ci-stretch
-  build-buster:
-    name: Linux (Debian buster)
+    - run: make ci-bookworm
+  build-oldest:
+    name: Linux (Debian bookworm)
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
     - uses: actions/setup-ruby@v1
-    - run: make ci-buster
+    - run: make ci-oldest
   build-stable:
     name: Linux (Rust stable)
     runs-on: ubuntu-latest

@@ -16,7 +16,7 @@ export PKG_CONFIG_ALL_DYNAMIC
 endif
 
 # Test configuration.
-GROUPS := stretch buster stable nightly
+GROUPS := bookworm oldest stable nightly
 CRATES := core bin lfs
 DOCKER_FILES := $(patsubst %,test/Dockerfile.%,$(GROUPS))
 DOCKER_STAMPS := $(patsubst %,test/Dockerfile.%.stamp,$(GROUPS))
