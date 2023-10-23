@@ -16,7 +16,7 @@ include = [
 rust-version = "1.63"
 
 [dependencies]
-clap = "^2.32"
+clap = { version = "^2.32", default-features = false }
 pcre2 = "^0.2.3"
 libc = "^0.2"
 # We don't require any sort of network connectivity, so don't bother building
