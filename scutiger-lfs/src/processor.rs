@@ -146,7 +146,7 @@ impl<R: io::Read, W: io::Write> PktLineHandler<R, W> {
     pub fn send_error(&mut self, status: u32, msg: &str) -> Result<(), Error> {
         self.send(format!("status {:03}\n", status).as_bytes())?;
         self.delim()?;
-        self.send(msg.as_bytes())?;
+        self.send(format!("{}\n", msg).as_bytes())?;
         self.flush()?;
         Ok(())
     }
@@ -357,7 +357,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
     }
 
     fn error(&self, code: u32, msg: &str) -> Result<Status, Error> {
-        Ok(Status::new_failure(code, msg.as_bytes()))
+        Ok(Status::new_failure(code, format!("{}\n", msg).as_bytes()))
     }
 
     fn read_batch(&mut self, mode: Mode) -> Result<Vec<BatchItem>, Error> {
@@ -509,7 +509,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
         let (rdr, size) = match self.backend.download(&oid, &args) {
             Ok(x) => x,
             Err(e) if e.io_kind() == io::ErrorKind::NotFound => {
-                return Ok(Status::new_failure(404, "not found".as_bytes()))
+                return Ok(Status::new_failure(404, "not found\n".as_bytes()))
             }
             Err(e) => return Err(e),
         };
@@ -558,7 +558,7 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
                 Ok(Status::new_failure_with_args(
                     409,
                     lock.as_arguments(),
-                    b"conflict",
+                    b"conflict\n",
                 ))
             };
         }
@@ -714,12 +714,13 @@ impl<'a, R: io::Read, W: io::Write> Processor<'a, R, W> {
                     | ErrorKind::ExtraData
                     | ErrorKind::CorruptData
                     | ErrorKind::NotAllowed
-                    | ErrorKind::UnknownCommand => self
-                        .handler
-                        .send_status(Status::new_failure(400, format!("error: {}", e).as_bytes())),
+                    | ErrorKind::UnknownCommand => self.handler.send_status(Status::new_failure(
+                        400,
+                        format!("error: {}\n", e).as_bytes(),
+                    )),
                     _ => self.handler.send_status(Status::new_failure(
                         500,
-                        format!("internal error: {}", e).as_bytes(),
+                        format!("internal error: {}\n", e).as_bytes(),
                     )),
                 },
             }?;
