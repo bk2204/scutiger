@@ -321,7 +321,8 @@ mod tests {
 0000000fstatus 200
 0000000fstatus 200
 0000000fstatus 409
-0001002emismatched size or cryptographic collision0000";
+0001002fmismatched size or cryptographic collision
+0000";
         assert_eq!(result, expected);
     }
 
@@ -351,7 +352,8 @@ mod tests {
 0000000fstatus 200
 0000000fstatus 200
 0000000fstatus 404
-0001000dnot found0000";
+0001000enot found
+0000";
         assert_eq!(result, expected);
     }
 
@@ -414,7 +416,8 @@ mod tests {
         let expected: &[u8] = b"000eversion=1
 0000000fstatus 200
 00010000000fstatus 400
-00010040error: not allowed: sha512 is not a permitted hash algorithm0000";
+00010041error: not allowed: sha512 is not a permitted hash algorithm
+0000";
         assert_eq!(result, expected);
     }
 
@@ -514,9 +517,11 @@ mod tests {
 004fce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626 32 upload
 0000000fstatus 200
 0000000fstatus 400
-000100acerror: corrupt data: expected oid ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626, got 367988c7cb91e13beda0a15fb271afcbf02fa7a0e75d9e25ac50b2b4b38af5f50000000fstatus 200
+000100aderror: corrupt data: expected oid ce08b837fe0c499d48935175ddce784e8c372d3cfb1c574fe1caff605d4f0626, got 367988c7cb91e13beda0a15fb271afcbf02fa7a0e75d9e25ac50b2b4b38af5f5
+0000000fstatus 200
 0000000fstatus 404
-0001000dnot found0000";
+0001000enot found
+0000";
         assert_eq!(result, expected);
     }
 
@@ -547,7 +552,8 @@ mod tests {
 000dpath=foo
 0028locked-at=2001-09-17T00:00:00+00:00
 0018ownername=test user
-0001000cconflict0000000fstatus 200
+0001000dconflict
+0000000fstatus 200
 0001004alock d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28
 004epath d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28 foo
 0069locked-at d76670443f4d5ecdeea34c12793917498e18e858c6f74cd38c4b794273bb5e28 2001-09-17T00:00:00+00:00

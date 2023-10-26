@@ -162,7 +162,11 @@ impl<R: io::Read, W: io::Write> PktLineHandler<R, W> {
         if let Some(ref messages) = status.messages {
             self.delim()?;
             for msg in messages.iter() {
-                self.send(msg)?;
+                if msg[msg.len() - 1] == b'\n' {
+                    self.send(msg)?;
+                } else {
+                    self.send(format!("{}\n", std::str::from_utf8(msg).unwrap()).as_bytes())?;
+                }
             }
         } else if let Some(ref mut reader) = status.reader {
             self.delim()?;
