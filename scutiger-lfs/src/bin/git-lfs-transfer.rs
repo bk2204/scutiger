@@ -111,6 +111,8 @@ impl<'p> Program<'p> {
         };
         let res = match perms {
             Some(value) => {
+                // If the user has read permissions, also set executable permissions.
+                let value = value | (value & 0o444) >> 2;
                 let new = 0o777 & !value as libc::mode_t;
                 unsafe { libc::umask(new) };
                 new
