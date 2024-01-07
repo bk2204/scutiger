@@ -18,6 +18,7 @@ rust-version = "1.63"
 pcre2 = { version = "^0.2.3", optional = true }
 git2 = { version = "0.16", default-features = false }
 pkg-config = "^0.3"
+thiserror = "1.0"
 
 [dev-dependencies]
 tempfile = "3"
