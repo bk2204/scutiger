@@ -23,8 +23,8 @@ extern crate tempfile;
 extern crate pretty_assertions;
 
 use clap::{App, Arg, ArgMatches};
-use git2::Repository;
 use scutiger_core::errors::{Error, ErrorKind, ExitStatus};
+use scutiger_core::repository::Repository;
 use scutiger_lfs::backend::local::LocalBackend;
 use scutiger_lfs::processor::{Mode, PktLineHandler, Processor};
 use std::fs;
@@ -97,16 +97,14 @@ impl<'p> Program<'p> {
     fn set_permissions(&self) -> Result<u32, Error> {
         let config = self.repo.config()?;
         let sval = config.get_string("core.sharedrepository");
-        let tval = sval.as_ref().map(|s| s.as_str());
-        let perms = match (config.get_bool("core.sharedrepository"), tval) {
-            (Ok(true), _) | (_, Ok("group")) => Some(0o660),
-            (Ok(false), _) | (_, Ok("umask")) => None,
-            (_, Ok("all")) | (_, Ok("world")) | (_, Ok("everybody")) => Some(0o664),
-            (_, Ok(x)) if u16::from_str_radix(x, 8).is_ok() => {
+        let perms = match (config.get_bool("core.sharedrepository"), sval) {
+            (Some(true), _) | (_, Some("group")) => Some(0o660),
+            (Some(false), _) | (_, Some("umask")) => None,
+            (_, Some("all")) | (_, Some("world")) | (_, Some("everybody")) => Some(0o664),
+            (_, Some(x)) if u16::from_str_radix(x, 8).is_ok() => {
                 Some(u16::from_str_radix(x, 8).unwrap())
             }
-            (_, Err(e)) if e.code() == git2::ErrorCode::NotFound => None,
-            (_, Err(e)) => return Err(git2::Error::new(e.code(), e.class(), e.message()).into()),
+            (_, None) => None,
             _ => None,
         };
         let res = match perms {
@@ -174,7 +172,7 @@ fn program<'a>(r: &'a Repository, matches: &'a ArgMatches) -> Program<'a> {
 }
 
 fn repo<P: AsRef<Path>>(path: P) -> Repository {
-    let repo = git2::Repository::open(path);
+    let repo = Repository::discover(path, true);
     match repo {
         Ok(r) => r,
         Err(e) => {
@@ -207,7 +205,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::{Error, Program};
-    use git2::Repository;
+    use scutiger_core::repository::Repository;
     use std::fs;
     use std::io;
     use std::io::Read;
@@ -221,7 +219,8 @@ mod tests {
     impl TestRepository {
         pub fn new() -> TestRepository {
             let dir = tempfile::tempdir().unwrap();
-            let repo = Repository::init(dir.path()).unwrap();
+            git2::Repository::init(dir.path()).unwrap();
+            let repo = Repository::discover(dir.path(), true).unwrap();
             TestRepository { repo, tempdir: dir }
         }
     }

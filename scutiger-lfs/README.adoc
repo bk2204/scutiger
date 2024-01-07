@@ -17,3 +17,7 @@ At this moment, the implementation does not support locking and it remains exper
 This utility should be fully functional on Unix systems, with the normal Git-related exceptions about case-insensitive systems.
 It is tested to build on Windows only with a minimal stable Rust toolchain, provided Windows 10 or 11 with Developer Mode is used.
 https://github.com/bk2204/.github/blob/dev/SUPPORTED.adoc[The supported platforms policy] otherwise applies.
+
+Note well that https://github.com/rust-lang/rust/issues/87945[Rust has a security problem invoking binaries without an absolute path on Windows].
+Until Rust is fixed, this software should not be used on Windows since it may execute arbitrary code.
+This is a vulnerability in Rust and will not be treated as a vulnerability in this software.

@@ -2,6 +2,7 @@
 #![allow(bare_trait_objects)]
 #![allow(clippy::upper_case_acronyms)]
 
+use crate::repository;
 use std::convert;
 use std::error;
 use std::fmt;
@@ -184,6 +185,12 @@ impl convert::From<git2::Error> for Error {
             _ => ErrorKind::GitError,
         };
         Error::new(kind, Some(error))
+    }
+}
+
+impl convert::From<repository::Error> for Error {
+    fn from(error: repository::Error) -> Self {
+        Error::new(ErrorKind::GitError, Some(error))
     }
 }
 
